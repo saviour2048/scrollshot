@@ -1,28 +1,67 @@
 import SwiftUI
 import AppKit
+import KeyboardShortcuts
 
 @main
 struct ScrollShotApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var session = CaptureSession()
 
     var body: some Scene {
-        WindowGroup(AppConfig.appName) {
-            MainView()
-                .environmentObject(session)
-                .frame(minWidth: 480, minHeight: 380)
+        MenuBarExtra(AppConfig.appName, systemImage: "camera.viewfinder") {
+            Button("截图") {
+                CaptureController.shared.trigger()
+            }
+
+            Button("滚动截图（开发中）") {}
+                .disabled(true)
+
+            Divider()
+
+            settingsButton
+
+            Button("关于 \(AppConfig.appName)") {
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.orderFrontStandardAboutPanel(nil)
+            }
+
+            Divider()
+
+            Button("退出 \(AppConfig.appName)") {
+                NSApp.terminate(nil)
+            }
+            .keyboardShortcut("q")
         }
-        .windowResizability(.contentMinSize)
+
+        Settings {
+            PreferencesView()
+        }
+    }
+
+    @ViewBuilder
+    private var settingsButton: some View {
+        if #available(macOS 14.0, *) {
+            SettingsLink {
+                Text("偏好设置…")
+            }
+        } else {
+            Button("偏好设置…") {
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            }
+        }
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-    }
+        // Menu-bar background app: no Dock icon, but can still show windows.
+        NSApp.setActivationPolicy(.accessory)
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        KeyboardShortcuts.onKeyUp(for: .captureRegion) {
+            // KeyboardShortcuts invokes handlers on the main thread.
+            MainActor.assumeIsolated {
+                CaptureController.shared.trigger()
+            }
+        }
     }
 }

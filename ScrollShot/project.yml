@@ -10,6 +10,10 @@ settings:
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_LANGUAGE: zh-Hans
+packages:
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    from: "2.0.0"
 targets:
   ScrollShot:
     type: application
@@ -18,11 +22,13 @@ targets:
     sources:
       - path: App
       - path: Capture
+      - path: Overlay
       - path: Stitch
       - path: Selection
-      - path: Views
-      - path: Models
+      - path: Preferences
       - path: Resources/Assets.xcassets
+    dependencies:
+      - package: KeyboardShortcuts
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.scrollshot.app

@@ -12,10 +12,18 @@ enum ImageUtilsError: LocalizedError {
     }
 }
 
-/// Image conversion / export helpers. (Stitching itself arrives in M3.)
+/// Image conversion / export helpers. (Stitching itself arrives with scroll mode.)
 enum ImageUtils {
     static func nsImage(from cgImage: CGImage) -> NSImage {
         NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+
+    /// Writes the image to ~/Desktop with a timestamped name and returns the URL.
+    @discardableResult
+    static func saveToDesktop(_ cgImage: CGImage, date: Date = Date()) throws -> URL {
+        let url = AppConfig.desktopDirectory.appendingPathComponent(AppConfig.defaultFileName(date: date))
+        try savePNG(cgImage, to: url)
+        return url
     }
 
     static func pngData(from cgImage: CGImage) -> Data? {

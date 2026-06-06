@@ -13,6 +13,12 @@ enum AppConfig {
             ?? FileManager.default.homeDirectoryForCurrentUser
     }
 
+    /// The Desktop directory — captures auto-save here (Flameshot-style).
+    static var desktopDirectory: URL {
+        FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser
+    }
+
     /// Timestamped default file name, e.g. `ScrollShot-20260606-153012.png`.
     static func defaultFileName(date: Date = Date()) -> String {
         let formatter = DateFormatter()

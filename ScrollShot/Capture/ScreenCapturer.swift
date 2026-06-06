@@ -1,8 +1,16 @@
 import Foundation
+import AppKit
 import ScreenCaptureKit
 import CoreGraphics
 import CoreMedia
 import CoreImage
+
+extension NSScreen {
+    /// The CoreGraphics display ID backing this screen, used to match `SCDisplay`.
+    var displayID: CGDirectDisplayID? {
+        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+    }
+}
 
 enum CaptureError: LocalizedError {
     case permissionDenied
