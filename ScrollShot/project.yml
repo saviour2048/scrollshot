@@ -23,6 +23,7 @@ targets:
       - path: App
       - path: Capture
       - path: Overlay
+      - path: Editor
       - path: Stitch
       - path: Selection
       - path: Preferences

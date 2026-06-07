@@ -42,4 +42,38 @@ enum ImageUtils {
         pasteboard.clearContents()
         return pasteboard.writeObjects([nsImage(from: cgImage)])
     }
+
+    /// Produces a blocky, pixelated copy of `image` (downscale + nearest-neighbour
+    /// upscale) for mosaic / redaction.
+    static func pixelated(_ image: CGImage, blockSize: Int = 12) -> CGImage? {
+        let width = image.width
+        let height = image.height
+        guard width > 0, height > 0 else { return nil }
+        let smallWidth = max(1, width / max(1, blockSize))
+        let smallHeight = max(1, height / max(1, blockSize))
+        guard let small = scale(image, width: smallWidth, height: smallHeight, interpolation: .medium) else {
+            return nil
+        }
+        return scale(small, width: width, height: height, interpolation: .none)
+    }
+
+    private static func scale(
+        _ image: CGImage,
+        width: Int,
+        height: Int,
+        interpolation: CGInterpolationQuality
+    ) -> CGImage? {
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        context.interpolationQuality = interpolation
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return context.makeImage()
+    }
 }
