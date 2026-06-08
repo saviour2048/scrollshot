@@ -18,13 +18,16 @@ enum AutoScroller {
         _ = AXIsProcessTrustedWithOptions(options)
     }
 
-    /// Scrolls down at an AppKit-global point by `pixels` (positive = downward,
-    /// i.e. revealing content further down the page).
-    static func scrollDown(atAppKitPoint appKitPoint: CGPoint, pixels: Int) {
-        let target = cgPoint(fromAppKit: appKitPoint)
-        CGWarpMouseCursorPosition(target)
-        // Negative wheel1 scrolls the page content downward. If a particular setup
-        // scrolls the wrong way, flip the sign here.
+    /// Moves the cursor to an AppKit-global point — ONCE at the start of auto
+    /// scrolling. We deliberately don't do this every tick, otherwise the
+    /// cursor is hijacked and the user can't click anything.
+    static func warp(toAppKitPoint appKitPoint: CGPoint) {
+        CGWarpMouseCursorPosition(cgPoint(fromAppKit: appKitPoint))
+    }
+
+    /// Posts a scroll-down event at the cursor's current location.
+    /// (Negative wheel1 scrolls content downward; flip the sign if reversed.)
+    static func postScrollDown(pixels: Int) {
         guard let event = CGEvent(
             scrollWheelEvent2Source: nil,
             units: .pixel,
@@ -33,7 +36,6 @@ enum AutoScroller {
             wheel2: 0,
             wheel3: 0
         ) else { return }
-        event.location = target
         event.post(tap: .cghidEventTap)
     }
 

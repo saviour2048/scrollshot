@@ -22,9 +22,12 @@ final class LongCaptureController {
 
     private var active = false
     private var auto = false
+    private var didWarpCursor = false
     private var frameInFlight = false
     private var tickCount = 0
     private var noGrowthCount = 0
+    private var escMonitorLocal: Any?
+    private var escMonitorGlobal: Any?
 
     private let tickInterval: TimeInterval = 0.3
     private let autoStopIdleTicks = 6
@@ -36,11 +39,13 @@ final class LongCaptureController {
         guard !active else { return }
         active = true
         auto = false
+        didWarpCursor = false
         self.region = region
         let stitcher = self.stitcher
         stitchQueue.async { stitcher.reset() }   // serialized before any add
         tickCount = 0
         noGrowthCount = 0
+        installEscapeHatch()
 
         let panel = LongCapturePanel()
         panel.onAuto = { [weak self] in self?.enableAuto() }
@@ -77,11 +82,10 @@ final class LongCaptureController {
         // granted the events work, otherwise the first post triggers the system
         // prompt. Show a hint either way.
         auto = true
+        didWarpCursor = false
         noGrowthCount = 0
         panel?.setAuto(true)
-        panel?.note(AutoScroller.isTrusted()
-                    ? "自动滚动中…到底会自动停止。"
-                    : "自动滚动中…若页面没动,请到 系统设置▸隐私▸辅助功能 勾选 ScrollShot 并重启 App。")
+        panel?.note("自动滚动中…按 Esc 或把鼠标移出选区即可停下,再点「完成/取消」。")
     }
 
     private func tick() {
@@ -92,11 +96,37 @@ final class LongCaptureController {
 
     private func performAutoScroll() {
         guard let region else { return }
+        // Position the cursor over the region ONCE, then never grab it again —
+        // so the user keeps control of the mouse and can click 完成/取消.
+        if !didWarpCursor {
+            AutoScroller.warp(toAppKitPoint: CGPoint(x: region.globalRect.midX, y: region.globalRect.midY))
+            didWarpCursor = true
+            return
+        }
+        // Only scroll while the cursor is still over the region. Moving the mouse
+        // out (e.g. toward the panel) pauses auto-scroll — an easy escape.
+        guard region.globalRect.contains(NSEvent.mouseLocation) else { return }
         let step = min(max(region.globalRect.height * 0.3, 60), 300)
-        AutoScroller.scrollDown(
-            atAppKitPoint: CGPoint(x: region.globalRect.midX, y: region.globalRect.midY),
-            pixels: Int(step)
-        )
+        AutoScroller.postScrollDown(pixels: Int(step))
+    }
+
+    // MARK: Escape hatch
+
+    private func installEscapeHatch() {
+        // Esc cancels the session, whether ScrollShot or the scrolled app is active.
+        escMonitorLocal = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 { self?.cancel(); return nil }
+            return event
+        }
+        escMonitorGlobal = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 { self?.cancel() }
+        }
+    }
+
+    private func removeEscapeHatch() {
+        [escMonitorLocal, escMonitorGlobal].forEach { if let m = $0 { NSEvent.removeMonitor(m) } }
+        escMonitorLocal = nil
+        escMonitorGlobal = nil
     }
 
     // MARK: Capture
@@ -147,6 +177,7 @@ final class LongCaptureController {
     private func finish() {
         guard active else { return }
         stopTimer()
+        removeEscapeHatch()
         active = false
         let scale = region?.scale ?? 2
         let stitcher = self.stitcher
@@ -171,6 +202,7 @@ final class LongCaptureController {
     private func cancel() {
         guard active else { return }
         stopTimer()
+        removeEscapeHatch()
         active = false
         panel?.close()
         panel = nil
