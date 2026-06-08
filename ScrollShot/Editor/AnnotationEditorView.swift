@@ -55,8 +55,8 @@ final class AnnotationEditorView: NSView, NSTextFieldDelegate {
     // MARK: External controls (wired from the toolbar)
 
     func selectTool(_ tool: AnnotationTool) { currentTool = tool; window?.invalidateCursorRects(for: self) }
-    func setColor(_ color: NSColor) { currentColor = color }
-    func setWidth(_ width: CGFloat) { currentWidth = width }
+    func setColor(_ color: NSColor) { currentColor = color; restyleActiveTextField() }
+    func setWidth(_ width: CGFloat) { currentWidth = width; restyleActiveTextField() }
 
     func undo() {
         guard !annotations.isEmpty else { return }
@@ -205,8 +205,8 @@ final class AnnotationEditorView: NSView, NSTextFieldDelegate {
     // MARK: Text
 
     private func beginTextEditing(at point: CGPoint) {
-        let fontSize = 12 + currentWidth * 2.5
-        let field = NSTextField(frame: CGRect(x: point.x, y: point.y, width: 220, height: fontSize + 10))
+        let fontSize = textFontSize(for: currentWidth)
+        let field = NSTextField(frame: CGRect(x: point.x, y: point.y, width: 120, height: fontSize + 10))
         field.font = .systemFont(ofSize: fontSize, weight: .semibold)
         field.textColor = currentColor
         field.drawsBackground = false
@@ -214,10 +214,38 @@ final class AnnotationEditorView: NSView, NSTextFieldDelegate {
         field.focusRingType = .none
         field.placeholderString = "输入文字，回车确认"
         field.delegate = self
+        field.cell?.wraps = false
+        field.cell?.isScrollable = false
+        field.usesSingleLineMode = true
         addSubview(field)
         window?.makeFirstResponder(field)
         activeTextField = field
         textOrigin = point
+    }
+
+    private func textFontSize(for width: CGFloat) -> CGFloat { 12 + width * 2.5 }
+
+    /// Grows the active text field to fit its text so characters never get clipped.
+    func controlTextDidChange(_ obj: Notification) {
+        resizeActiveTextField()
+    }
+
+    private func resizeActiveTextField() {
+        guard let field = activeTextField, let font = field.font else { return }
+        let text = field.stringValue.isEmpty ? (field.placeholderString ?? "") : field.stringValue
+        let width = (text as NSString).size(withAttributes: [.font: font]).width
+        var frame = field.frame
+        frame.size.width = min(max(100, width + 18), max(100, bounds.width - frame.minX - 4))
+        frame.size.height = font.pointSize + 10
+        field.frame = frame
+    }
+
+    private func restyleActiveTextField() {
+        guard let field = activeTextField else { return }
+        field.textColor = currentColor
+        field.font = .systemFont(ofSize: textFontSize(for: currentWidth), weight: .semibold)
+        resizeActiveTextField()
+        needsDisplay = true
     }
 
     private func commitActiveText() {

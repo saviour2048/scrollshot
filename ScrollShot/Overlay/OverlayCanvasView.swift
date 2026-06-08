@@ -298,8 +298,8 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     // MARK: Text annotations
 
     private func beginTextEditing(at point: CGPoint) {
-        let fontSize = 12 + currentWidth * 2.5
-        let field = NSTextField(frame: CGRect(x: point.x, y: point.y, width: 220, height: fontSize + 10))
+        let fontSize = textFontSize(for: currentWidth)
+        let field = NSTextField(frame: CGRect(x: point.x, y: point.y, width: 120, height: fontSize + 10))
         field.font = .systemFont(ofSize: fontSize, weight: .semibold)
         field.textColor = currentColor
         field.drawsBackground = false
@@ -308,11 +308,38 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         field.placeholderString = "输入文字，回车确认"
         field.delegate = self
         field.cell?.wraps = false
-        field.cell?.isScrollable = true
+        field.cell?.isScrollable = false
+        field.usesSingleLineMode = true
         addSubview(field)
         window?.makeFirstResponder(field)
         activeTextField = field
         textOrigin = point
+    }
+
+    private func textFontSize(for width: CGFloat) -> CGFloat { 12 + width * 2.5 }
+
+    /// Grows the active text field to fit its text so characters never get clipped.
+    func controlTextDidChange(_ obj: Notification) {
+        resizeActiveTextField()
+    }
+
+    private func resizeActiveTextField() {
+        guard let field = activeTextField, let font = field.font else { return }
+        let text = field.stringValue.isEmpty ? (field.placeholderString ?? "") : field.stringValue
+        let width = (text as NSString).size(withAttributes: [.font: font]).width
+        var frame = field.frame
+        frame.size.width = min(max(100, width + 18), max(100, bounds.width - frame.minX - 4))
+        frame.size.height = font.pointSize + 10
+        field.frame = frame
+    }
+
+    /// Re-applies the current color / font size to the text being edited.
+    private func restyleActiveTextField() {
+        guard let field = activeTextField else { return }
+        field.textColor = currentColor
+        field.font = .systemFont(ofSize: textFontSize(for: currentWidth), weight: .semibold)
+        resizeActiveTextField()
+        needsDisplay = true
     }
 
     private func commitActiveText() {
@@ -367,9 +394,13 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
             // after clicking a tool button.
             self?.restoreFocus()
         }
-        bar.onColor = { [weak self] color in self?.currentColor = color }
+        bar.onColor = { [weak self] color in
+            self?.currentColor = color
+            self?.restyleActiveTextField()
+        }
         bar.onWidth = { [weak self] width in
             self?.currentWidth = width
+            self?.restyleActiveTextField()
             self?.restoreFocus()
         }
         bar.onUndo = { [weak self] in
