@@ -21,8 +21,11 @@ final class AnnotationBar: NSView {
     init() {
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.black.withAlphaComponent(0.8).cgColor
-        layer?.cornerRadius = 8
+        layer?.backgroundColor = NSColor.black.withAlphaComponent(0.82).cgColor
+        layer?.cornerRadius = 10
+        // The bar uses a dark background, so render the standard controls
+        // (buttons / segmented control / color well) in dark mode for contrast.
+        appearance = NSAppearance(named: .darkAqua)
         buildUI()
     }
 
@@ -74,7 +77,9 @@ final class AnnotationBar: NSView {
 
         views.append(actionButton(title: "撤销", action: #selector(undoTapped)))
         views.append(separator())
-        views.append(actionButton(title: "保存", action: #selector(saveTapped)))
+        let saveButton = actionButton(title: "保存", action: #selector(saveTapped))
+        saveButton.bezelColor = .controlAccentColor   // make the primary action stand out
+        views.append(saveButton)
         views.append(actionButton(title: "复制", action: #selector(copyTapped)))
         views.append(actionButton(title: "取消", action: #selector(cancelTapped)))
 
