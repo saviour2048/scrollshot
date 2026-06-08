@@ -11,6 +11,7 @@ import CoreGraphics
 final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     var onFinish: ((CGImage) -> Void)?
     var onCancel: (() -> Void)?
+    var onLongCapture: ((LongCaptureRegion) -> Void)?
 
     private enum Mode { case idle, selecting, drawing, moving }
 
@@ -378,6 +379,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         bar.onSave = { [weak self] in self?.confirmSave() }
         bar.onCopy = { [weak self] in self?.confirmCopy() }
         bar.onCancel = { [weak self] in self?.onCancel?() }
+        bar.onLongCapture = { [weak self] in self?.requestLongCapture() }
         currentColor = bar.currentColor
         currentWidth = bar.currentWidth
         addSubview(bar)
@@ -424,6 +426,29 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         guard let image = outputImage() else { onCancel?(); return }
         ImageUtils.copyToPasteboard(image)
         onCancel?()
+    }
+
+    /// Hands the chosen region off to long (scroll) capture.
+    private func requestLongCapture() {
+        commitActiveText()
+        guard let rect = selectionRect,
+              rect.width >= 1, rect.height >= 1,
+              let displayID = shot.screen.displayID else { onCancel?(); return }
+        let frame = shot.screen.frame
+        let globalRect = CGRect(
+            x: frame.minX + rect.minX,
+            y: frame.maxY - rect.maxY,
+            width: rect.width,
+            height: rect.height
+        )
+        let region = LongCaptureRegion(
+            screen: shot.screen,
+            displayID: displayID,
+            sourceRect: rect,
+            globalRect: globalRect,
+            scale: shot.screen.backingScaleFactor
+        )
+        onLongCapture?(region)
     }
 
     /// Renders the frozen image + annotations at full pixel resolution, then

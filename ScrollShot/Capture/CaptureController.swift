@@ -48,14 +48,21 @@ final class CaptureController {
         }
     }
 
-    private func finish(with result: CGImage?) {
-        guard let image = result else { return }
-        ImageUtils.copyToPasteboard(image)
-        do {
-            let url = try ImageUtils.saveToDesktop(image)
-            NSLog("ScrollShot: saved \(url.path)")
-        } catch {
-            presentError("保存到桌面失败：\(error.localizedDescription)")
+    private func finish(with result: OverlayResult) {
+        switch result {
+        case .cancelled:
+            break
+        case let .image(image):
+            ImageUtils.copyToPasteboard(image)
+            do {
+                let url = try ImageUtils.saveToDesktop(image)
+                NSLog("ScrollShot: saved \(url.path)")
+            } catch {
+                presentError("保存到桌面失败：\(error.localizedDescription)")
+            }
+        case let .longCapture(region):
+            // Overlay has dismissed; hand off to scroll capture.
+            LongCaptureController.shared.begin(region: region)
         }
     }
 

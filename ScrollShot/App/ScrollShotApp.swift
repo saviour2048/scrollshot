@@ -8,11 +8,7 @@ struct ScrollShotApp: App {
 
     var body: some Scene {
         MenuBarExtra(AppConfig.appName, systemImage: "camera.viewfinder") {
-            Button("截图中心…") {
-                CaptureCenterWindowController.shared.show()
-            }
-
-            Button("截图（框选）") {
+            Button("截图 / 长截图") {
                 CaptureController.shared.trigger()
             }
 

@@ -10,15 +10,18 @@ final class AnnotationBar: NSView {
     var onSave: (() -> Void)?
     var onCopy: (() -> Void)?
     var onCancel: (() -> Void)?
+    var onLongCapture: (() -> Void)?
 
     private static let orderedTools: [AnnotationTool] = [.arrow, .rectangle, .ellipse, .pen, .text, .mosaic]
     private static let widthValues: [CGFloat] = [2, 4, 7]
 
+    private let showsLongCapture: Bool
     private var toolButtons: [AnnotationTool: NSButton] = [:]
     private let colorWell = NSColorWell()
     private let stack = NSStackView()
 
-    init() {
+    init(showsLongCapture: Bool = true) {
+        self.showsLongCapture = showsLongCapture
         super.init(frame: .zero)
         wantsLayer = true
         layer?.backgroundColor = NSColor.black.withAlphaComponent(0.82).cgColor
@@ -77,6 +80,11 @@ final class AnnotationBar: NSView {
 
         views.append(actionButton(title: "撤销", action: #selector(undoTapped)))
         views.append(separator())
+        if showsLongCapture {
+            let longButton = actionButton(title: "长截图", action: #selector(longCaptureTapped))
+            longButton.bezelColor = .systemTeal
+            views.append(longButton)
+        }
         let saveButton = actionButton(title: "保存", action: #selector(saveTapped))
         saveButton.bezelColor = .controlAccentColor   // make the primary action stand out
         views.append(saveButton)
@@ -173,6 +181,7 @@ final class AnnotationBar: NSView {
     }
 
     @objc private func undoTapped() { onUndo?() }
+    @objc private func longCaptureTapped() { onLongCapture?() }
     @objc private func saveTapped() { onSave?() }
     @objc private func copyTapped() { onCopy?() }
     @objc private func cancelTapped() { onCancel?() }
