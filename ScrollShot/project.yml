@@ -37,6 +37,7 @@ targets:
         INFOPLIST_FILE: Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: Resources/ScrollShot.entitlements
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: "5QZY8FV25Y"   # 固定签名:屏幕录制等授权才能跨重新编译保留
         ENABLE_HARDENED_RUNTIME: YES
         COMBINE_HIDPI_IMAGES: YES
         LD_RUNPATH_SEARCH_PATHS:
