@@ -70,7 +70,6 @@ final class LongCapturePanel {
 
     private func buildUI() {
         guard let content = window.contentView else { return }
-        content.appearance = NSAppearance(named: .darkAqua)
 
         statusLabel.font = .systemFont(ofSize: 12)
         statusLabel.textColor = .secondaryLabelColor
@@ -80,7 +79,7 @@ final class LongCapturePanel {
         previewView.imageScaling = .scaleProportionallyUpOrDown
         previewView.imageAlignment = .alignTop
         previewView.wantsLayer = true
-        previewView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.25).cgColor
+        previewView.layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
         previewView.layer?.cornerRadius = 6
         // Never let the (possibly very wide) image drive layout.
         previewView.setContentHuggingPriority(.init(1), for: .horizontal)

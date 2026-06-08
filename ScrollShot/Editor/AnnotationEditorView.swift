@@ -13,6 +13,10 @@ final class AnnotationEditorView: NSView {
     private let baseCGImage: CGImage
     private let baseImage: NSImage
     private let scale: CGFloat
+    /// Fixed point-size of the image (pixels / scale). Used for rendering &
+    /// export so the output never depends on the live `bounds` (which a scroll
+    /// view may resize), which would otherwise truncate the long image.
+    private let displaySize: NSSize
 
     private var mode: Mode = .idle
     private var startPoint: CGPoint?
@@ -29,16 +33,17 @@ final class AnnotationEditorView: NSView {
 
     private lazy var pixelatedImage: NSImage? = {
         guard let cg = ImageUtils.pixelated(baseCGImage) else { return nil }
-        return NSImage(cgImage: cg, size: bounds.size)
+        return NSImage(cgImage: cg, size: displaySize)
     }()
 
     init(image: CGImage, scale: CGFloat) {
         self.baseCGImage = image
         self.scale = max(1, scale)
-        let displaySize = NSSize(width: CGFloat(image.width) / self.scale,
-                                 height: CGFloat(image.height) / self.scale)
-        self.baseImage = NSImage(cgImage: image, size: displaySize)
-        super.init(frame: NSRect(origin: .zero, size: displaySize))
+        let size = NSSize(width: CGFloat(image.width) / max(1, scale),
+                          height: CGFloat(image.height) / max(1, scale))
+        self.displaySize = size
+        self.baseImage = NSImage(cgImage: image, size: size)
+        super.init(frame: NSRect(origin: .zero, size: size))
     }
 
     @available(*, unavailable)
@@ -80,11 +85,12 @@ final class AnnotationEditorView: NSView {
     // MARK: Drawing
 
     override func draw(_ dirtyRect: NSRect) {
-        baseImage.draw(in: bounds)
+        let rect = NSRect(origin: .zero, size: displaySize)
+        baseImage.draw(in: rect)
         for annotation in annotations {
-            annotation.draw(pixelatedImage: pixelatedImage, fullBounds: bounds)
+            annotation.draw(pixelatedImage: pixelatedImage, fullBounds: rect)
         }
-        draft?.draw(pixelatedImage: pixelatedImage, fullBounds: bounds)
+        draft?.draw(pixelatedImage: pixelatedImage, fullBounds: rect)
     }
 
     // MARK: Mouse
@@ -267,9 +273,11 @@ final class AnnotationEditorView: NSView {
         let flipped = NSGraphicsContext(cgContext: cg, flipped: true)
         NSGraphicsContext.current = flipped
 
-        baseImage.draw(in: bounds)
+        // Render against the fixed display size, NOT the live `bounds`.
+        let rect = NSRect(origin: .zero, size: displaySize)
+        baseImage.draw(in: rect)
         for annotation in annotations {
-            annotation.draw(pixelatedImage: pixelatedImage, fullBounds: bounds)
+            annotation.draw(pixelatedImage: pixelatedImage, fullBounds: rect)
         }
         NSGraphicsContext.restoreGraphicsState()
 
