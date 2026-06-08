@@ -12,7 +12,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     var onFinish: ((CGImage) -> Void)?
     var onCancel: (() -> Void)?
 
-    private enum Mode { case idle, selecting, drawing }
+    private enum Mode { case idle, selecting, drawing, moving }
 
     private let shot: DisplayShot
     private let frozenImage: NSImage
@@ -20,6 +20,9 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     private var mode: Mode = .idle
     private var startPoint: CGPoint?
     private var selectionRect: CGRect? { didSet { needsDisplay = true } }
+
+    private var movingIndex: Int?
+    private var lastMovePoint: CGPoint = .zero
 
     private var annotations: [Annotation] = []
     private var draft: Annotation?
@@ -135,17 +138,39 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
             return
         }
 
-        if selection.contains(point), let tool = currentTool {
-            if tool == .text {
-                beginTextEditing(at: point)
-            } else {
-                beginDrawing(tool: tool, at: point)
-            }
-        } else {
-            annotations.removeAll()
-            draft = nil
-            beginSelection(at: point)
+        // 1. Grab an existing annotation (topmost first) to drag it.
+        if let index = hitTestAnnotation(at: point) {
+            mode = .moving
+            movingIndex = index
+            lastMovePoint = point
+            startPoint = point
+            return
         }
+
+        // 2. Inside the selection with a tool active → draw.
+        if selection.contains(point) {
+            if let tool = currentTool {
+                if tool == .text {
+                    beginTextEditing(at: point)
+                } else {
+                    beginDrawing(tool: tool, at: point)
+                }
+            }
+            return
+        }
+
+        // 3. Clicked outside the selection → start a new selection.
+        annotations.removeAll()
+        draft = nil
+        beginSelection(at: point)
+    }
+
+    /// Index of the topmost annotation under `point`, if any.
+    private func hitTestAnnotation(at point: CGPoint) -> Int? {
+        for index in annotations.indices.reversed() where annotations[index].hitTest(point, tolerance: 8) {
+            return index
+        }
+        return nil
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -157,13 +182,27 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         case .drawing:
             updateDraft(from: start, to: point)
             needsDisplay = true
+        case .moving:
+            moveAnnotation(to: point)
         case .idle:
             break
         }
     }
 
+    /// Drags the grabbed annotation, keeping its bounds within the selection.
+    private func moveAnnotation(to point: CGPoint) {
+        guard let index = movingIndex, let selection = selectionRect else { return }
+        var delta = CGSize(width: point.x - lastMovePoint.x, height: point.y - lastMovePoint.y)
+        let box = annotations[index].boundingBox
+        delta.width = min(max(delta.width, selection.minX - box.minX), selection.maxX - box.maxX)
+        delta.height = min(max(delta.height, selection.minY - box.minY), selection.maxY - box.maxY)
+        annotations[index] = annotations[index].translated(by: delta)
+        lastMovePoint = point
+        needsDisplay = true
+    }
+
     override func mouseUp(with event: NSEvent) {
-        defer { startPoint = nil; mode = .idle }
+        defer { startPoint = nil; mode = .idle; movingIndex = nil }
         switch mode {
         case .selecting:
             if let rect = selectionRect,
@@ -177,7 +216,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
             if let draft, isValid(draft) { annotations.append(draft) }
             draft = nil
             needsDisplay = true
-        case .idle:
+        case .moving, .idle:
             break
         }
     }
@@ -321,10 +360,21 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
 
     private func makeBar() -> AnnotationBar {
         let bar = AnnotationBar()
-        bar.onSelectTool = { [weak self] tool in self?.currentTool = tool }
+        bar.onSelectTool = { [weak self] tool in
+            self?.currentTool = tool
+            // Restore keyboard focus to the canvas so Return/Esc keep working
+            // after clicking a tool button.
+            self?.restoreFocus()
+        }
         bar.onColor = { [weak self] color in self?.currentColor = color }
-        bar.onWidth = { [weak self] width in self?.currentWidth = width }
-        bar.onUndo = { [weak self] in self?.undo() }
+        bar.onWidth = { [weak self] width in
+            self?.currentWidth = width
+            self?.restoreFocus()
+        }
+        bar.onUndo = { [weak self] in
+            self?.undo()
+            self?.restoreFocus()
+        }
         bar.onSave = { [weak self] in self?.confirmSave() }
         bar.onCopy = { [weak self] in self?.confirmCopy() }
         bar.onCancel = { [weak self] in self?.onCancel?() }
@@ -333,6 +383,12 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         addSubview(bar)
         self.bar = bar
         return bar
+    }
+
+    /// Make the canvas first responder again unless a text field is being edited.
+    private func restoreFocus() {
+        guard activeTextField == nil else { return }
+        window?.makeFirstResponder(self)
     }
 
     private func positionBar(_ bar: AnnotationBar, for rect: CGRect) {

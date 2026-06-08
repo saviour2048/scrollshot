@@ -1,6 +1,12 @@
 import AppKit
 import CoreGraphics
 
+private extension CGPoint {
+    func offset(_ delta: CGSize) -> CGPoint {
+        CGPoint(x: x + delta.width, y: y + delta.height)
+    }
+}
+
 /// The drawing tools available in the overlay toolbar.
 enum AnnotationTool: Int, CaseIterable {
     case arrow, rectangle, ellipse, pen, text, mosaic
@@ -71,6 +77,87 @@ struct Annotation {
             pixelatedImage.draw(in: fullBounds)
             NSGraphicsContext.restoreGraphicsState()
         }
+    }
+
+    /// The axis-aligned bounds of the annotation in canvas points.
+    var boundingBox: CGRect {
+        switch shape {
+        case let .arrow(from, to):
+            return CGRect(x: min(from.x, to.x), y: min(from.y, to.y),
+                          width: abs(from.x - to.x), height: abs(from.y - to.y))
+        case let .rectangle(rect), let .ellipse(rect), let .mosaic(rect):
+            return rect
+        case let .pen(points):
+            guard let first = points.first else { return .zero }
+            var minX = first.x, minY = first.y, maxX = first.x, maxY = first.y
+            for point in points {
+                minX = min(minX, point.x); minY = min(minY, point.y)
+                maxX = max(maxX, point.x); maxY = max(maxY, point.y)
+            }
+            return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        case let .text(origin, string, fontSize):
+            let size = (string as NSString).size(withAttributes: [
+                .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold)
+            ])
+            return CGRect(origin: origin, size: size)
+        }
+    }
+
+    /// Whether `point` lands on the annotation (used to grab it for dragging).
+    func hitTest(_ point: CGPoint, tolerance: CGFloat) -> Bool {
+        let tol = max(tolerance, lineWidth + 4)
+        switch shape {
+        case let .arrow(from, to):
+            return Annotation.distance(point, toSegment: from, to) <= tol
+        case let .pen(points):
+            guard points.count > 1 else { return false }
+            for i in 0..<(points.count - 1) where
+                Annotation.distance(point, toSegment: points[i], points[i + 1]) <= tol {
+                return true
+            }
+            return false
+        case let .rectangle(rect), let .ellipse(rect):
+            // Grab near the outline; for small shapes the whole box is grabbable.
+            let outer = rect.insetBy(dx: -tol, dy: -tol)
+            let inner = rect.insetBy(dx: tol, dy: tol)
+            guard outer.contains(point) else { return false }
+            return inner.width <= 0 || inner.height <= 0 || !inner.contains(point)
+        case let .mosaic(rect):
+            return rect.contains(point)
+        case .text:
+            return boundingBox.insetBy(dx: -tol, dy: -tol).contains(point)
+        }
+    }
+
+    /// A copy translated by `delta`.
+    func translated(by delta: CGSize) -> Annotation {
+        var copy = self
+        switch shape {
+        case let .arrow(from, to):
+            copy.shape = .arrow(from: from.offset(delta), to: to.offset(delta))
+        case let .rectangle(rect):
+            copy.shape = .rectangle(rect.offsetBy(dx: delta.width, dy: delta.height))
+        case let .ellipse(rect):
+            copy.shape = .ellipse(rect.offsetBy(dx: delta.width, dy: delta.height))
+        case let .mosaic(rect):
+            copy.shape = .mosaic(rect.offsetBy(dx: delta.width, dy: delta.height))
+        case let .pen(points):
+            copy.shape = .pen(points.map { $0.offset(delta) })
+        case let .text(origin, string, fontSize):
+            copy.shape = .text(origin: origin.offset(delta), string: string, fontSize: fontSize)
+        }
+        return copy
+    }
+
+    /// Distance from a point to a line segment.
+    static func distance(_ p: CGPoint, toSegment a: CGPoint, _ b: CGPoint) -> CGFloat {
+        let dx = b.x - a.x, dy = b.y - a.y
+        let lengthSquared = dx * dx + dy * dy
+        if lengthSquared == 0 { return hypot(p.x - a.x, p.y - a.y) }
+        var t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSquared
+        t = max(0, min(1, t))
+        let proj = CGPoint(x: a.x + t * dx, y: a.y + t * dy)
+        return hypot(p.x - proj.x, p.y - proj.y)
     }
 
     static func drawArrow(from: CGPoint, to: CGPoint, lineWidth: CGFloat, color: NSColor) {
