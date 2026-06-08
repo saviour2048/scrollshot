@@ -223,10 +223,16 @@ final class OverlayCanvasView: NSView {
 
     override func keyDown(with event: NSEvent) {
         switch event.keyCode {
-        case 53: onCancel?()           // Esc
+        case 53: handleEscape()        // Esc
         case 36, 76: confirmSave()     // Return / Enter
         default: super.keyDown(with: event)
         }
+    }
+
+    /// Exit the capture overlay. Called both from the canvas's own keyDown and
+    /// from the window (`cancelOperation`) when focus is on a toolbar control.
+    func handleEscape() {
+        onCancel?()
     }
 
     // MARK: Selection / drawing helpers

@@ -54,7 +54,9 @@ final class AnnotationBar: NSView {
         var views: [NSView] = []
 
         for (index, tool) in Self.orderedTools.enumerated() {
-            let button = toolButton(symbol: symbol(for: tool), tip: tip(for: tool), tag: index)
+            let button = tool == .text
+                ? labeledToolButton(title: "文字", tag: index)
+                : toolButton(symbol: symbol(for: tool), tip: tip(for: tool), tag: index)
             toolButtons[tool] = button
             views.append(button)
         }
@@ -105,8 +107,20 @@ final class AnnotationBar: NSView {
 
     func setActiveTool(_ tool: AnnotationTool?) {
         for (candidate, button) in toolButtons {
-            button.contentTintColor = (candidate == tool) ? .controlAccentColor : .white
+            let color: NSColor = (candidate == tool) ? .controlAccentColor : .white
+            button.contentTintColor = color
+            if !button.title.isEmpty { applyTitleColor(color, to: button) }
         }
+    }
+
+    private func applyTitleColor(_ color: NSColor, to button: NSButton) {
+        button.attributedTitle = NSAttributedString(
+            string: button.title,
+            attributes: [
+                .foregroundColor: color,
+                .font: NSFont.systemFont(ofSize: 12, weight: .medium)
+            ]
+        )
     }
 
     // MARK: Builders
@@ -125,6 +139,20 @@ final class AnnotationBar: NSView {
         button.translatesAutoresizingMaskIntoConstraints = false
         button.widthAnchor.constraint(equalToConstant: 30).isActive = true
         button.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        return button
+    }
+
+    /// A tool button that shows a text label (e.g. 「文字」) instead of an icon.
+    private func labeledToolButton(title: String, tag: Int) -> NSButton {
+        let button = NSButton(title: title, target: self, action: #selector(toolTapped(_:)))
+        button.isBordered = false
+        button.bezelStyle = .texturedRounded
+        button.font = .systemFont(ofSize: 12, weight: .medium)
+        button.contentTintColor = .white
+        button.tag = tag
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        applyTitleColor(.white, to: button)   // visible on the dark toolbar
         return button
     }
 

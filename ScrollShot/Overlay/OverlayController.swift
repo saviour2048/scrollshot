@@ -65,4 +65,10 @@ final class OverlayWindow: NSWindow {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    /// Esc anywhere in the overlay (incl. when a toolbar control has focus,
+    /// which sends `cancelOperation:` up the responder chain) exits capture.
+    override func cancelOperation(_ sender: Any?) {
+        canvas.handleEscape()
+    }
 }
