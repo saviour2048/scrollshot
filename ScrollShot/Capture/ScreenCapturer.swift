@@ -59,7 +59,8 @@ final class ScreenCapturer {
     func captureRegion(
         displayID: CGDirectDisplayID,
         sourceRect: CGRect,
-        scale: CGFloat
+        scale: CGFloat,
+        excludingWindowIDs: [CGWindowID] = []
     ) async throws -> CGImage {
         guard sourceRect.width >= 1, sourceRect.height >= 1 else {
             throw CaptureError.emptyRegion
@@ -76,7 +77,10 @@ final class ScreenCapturer {
             throw CaptureError.displayNotFound
         }
 
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+        let excluded = excludingWindowIDs.isEmpty
+            ? []
+            : content.windows.filter { excludingWindowIDs.contains($0.windowID) }
+        let filter = SCContentFilter(display: display, excludingWindows: excluded)
 
         let config = SCStreamConfiguration()
         config.sourceRect = sourceRect

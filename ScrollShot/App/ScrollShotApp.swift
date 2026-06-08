@@ -12,8 +12,9 @@ struct ScrollShotApp: App {
                 CaptureController.shared.trigger()
             }
 
-            Button("滚动截图（开发中）") {}
-                .disabled(true)
+            Button("滚动截图") {
+                ScrollCaptureController.shared.trigger()
+            }
 
             Divider()
 
