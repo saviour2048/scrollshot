@@ -19,15 +19,19 @@ final class AnnotationBar: NSView {
     private var toolButtons: [AnnotationTool: NSButton] = [:]
     private let colorWell = NSColorWell()
     private let stack = NSStackView()
+    /// Liquid Glass background (renders as Liquid Glass on macOS Tahoe, vibrancy
+    /// on earlier systems). Lets the screenshot show through the toolbar.
+    private let glass = NSVisualEffectView()
 
     init(showsLongCapture: Bool = true) {
         self.showsLongCapture = showsLongCapture
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.black.withAlphaComponent(0.82).cgColor
-        layer?.cornerRadius = 10
-        // The bar uses a dark background, so render the standard controls
-        // (buttons / segmented control / color well) in dark mode for contrast.
+        layer?.cornerRadius = 13
+        layer?.masksToBounds = true
+        layer?.borderWidth = 1
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor  // glass highlight edge
+        // Standard controls render in dark mode for contrast on the glass.
         appearance = NSAppearance(named: .darkAqua)
         buildUI()
     }
@@ -47,10 +51,16 @@ final class AnnotationBar: NSView {
 
     override func layout() {
         super.layout()
+        glass.frame = bounds
         stack.frame = bounds
     }
 
     private func buildUI() {
+        glass.material = .hudWindow
+        glass.blendingMode = .withinWindow
+        glass.state = .active
+        addSubview(glass)
+
         var views: [NSView] = []
 
         for (index, tool) in Self.orderedTools.enumerated() {
@@ -96,8 +106,8 @@ final class AnnotationBar: NSView {
         views.forEach { stack.addArrangedSubview($0) }
         stack.orientation = .horizontal
         stack.alignment = .centerY
-        stack.spacing = 6
-        stack.edgeInsets = NSEdgeInsets(top: 6, left: 10, bottom: 6, right: 10)
+        stack.spacing = 8
+        stack.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
         // Don't let any control be compressed out of view; the bar is sized to
         // the stack's full content via `contentSize`.
         stack.setHuggingPriority(.required, for: .horizontal)
