@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import ScreenCaptureKit
 
 /// Runs a long (scroll) capture for an already-chosen region: shows the
 /// bottom-left panel, grabs a frame every ~0.3 s while the user (manual) or the
@@ -15,6 +16,7 @@ final class LongCaptureController {
     private var panel: LongCapturePanel?
     private var timer: Timer?
     private var region: LongCaptureRegion?
+    private var filter: SCContentFilter?   // built once per session (avoids per-frame system query)
 
     private var active = false
     private var auto = false
@@ -44,9 +46,22 @@ final class LongCaptureController {
         panel.show(atBottomLeftOf: region.screen)
         self.panel = panel
 
-        captureFrame()
-        timer = Timer.scheduledTimer(withTimeInterval: tickInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.tick() }
+        // Build the capture filter ONCE (excluding the panel), then start ticking.
+        let excluded = panel.windowID.map { [$0] } ?? []
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                self.filter = try await self.capturer.makeFilter(
+                    displayID: region.displayID,
+                    excludingWindowIDs: excluded
+                )
+            } catch {
+                NSLog("ScrollShot: makeFilter failed: \(error.localizedDescription)")
+            }
+            guard self.active else { return }
+            self.timer = Timer.scheduledTimer(withTimeInterval: self.tickInterval, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.tick() }
+            }
         }
     }
 
@@ -56,12 +71,16 @@ final class LongCaptureController {
         guard active else { return }
         if !AutoScroller.isTrusted() {
             AutoScroller.requestTrust()
-            panel?.note("需要「辅助功能」权限。请在系统设置勾选 ScrollShot 后再点「自动滚动」。")
+            panel?.note("需要「辅助功能」权限:系统设置▸隐私与安全性▸辅助功能 勾选 ScrollShot,然后再点「自动滚动」。")
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                NSWorkspace.shared.open(url)
+            }
             return
         }
         auto = true
         noGrowthCount = 0
         panel?.setAuto(true)
+        panel?.note("自动滚动中…到底会自动停止。")
     }
 
     private func tick() {
@@ -82,19 +101,17 @@ final class LongCaptureController {
     // MARK: Capture
 
     private func captureFrame() {
-        guard active, !frameInFlight, let region else { return }
+        guard active, !frameInFlight, let region, let filter else { return }
         frameInFlight = true
-        let excluded = panel?.windowID.map { [$0] } ?? []
 
         Task { [weak self] in
             guard let self else { return }
             defer { self.frameInFlight = false }
             do {
-                let frame = try await self.capturer.captureRegion(
-                    displayID: region.displayID,
+                let frame = try await self.capturer.capture(
+                    filter: filter,
                     sourceRect: region.sourceRect,
-                    scale: region.scale,
-                    excludingWindowIDs: excluded
+                    scale: region.scale
                 )
                 guard self.active else { return }
                 let grew = self.stitcher.add(frame)
@@ -128,6 +145,7 @@ final class LongCaptureController {
         panel?.close()
         panel = nil
         region = nil
+        filter = nil
 
         guard let result else {
             presentInfo("没有捕获到内容。请重试,记得向下滚动页面。")
@@ -143,6 +161,7 @@ final class LongCaptureController {
         panel?.close()
         panel = nil
         region = nil
+        filter = nil
     }
 
     private func stopTimer() {

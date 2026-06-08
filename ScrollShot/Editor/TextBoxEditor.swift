@@ -11,8 +11,8 @@ final class TextBoxEditor: NSView, NSTextViewDelegate {
     var onFinished: (() -> Void)?
 
     private let textView = NSTextView()
-    private let inset: CGFloat = 8
-    private let handleHit: CGFloat = 12
+    private let inset: CGFloat = 10
+    private let handleHit: CGFloat = 18
     private let minSize = NSSize(width: 60, height: 28)
 
     private var color: NSColor
@@ -98,12 +98,12 @@ final class TextBoxEditor: NSView, NSTextViewDelegate {
         border.stroke()
 
         for center in handleCenters() {
-            let rect = CGRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8)
-            NSColor.white.setFill()
+            let rect = CGRect(x: center.x - 5, y: center.y - 5, width: 11, height: 11)
+            NSColor.controlAccentColor.setFill()
             NSBezierPath(ovalIn: rect).fill()
-            NSColor.controlAccentColor.setStroke()
+            NSColor.white.setStroke()
             let ring = NSBezierPath(ovalIn: rect)
-            ring.lineWidth = 1
+            ring.lineWidth = 1.5
             ring.stroke()
         }
     }

@@ -81,7 +81,34 @@ final class ScreenCapturer {
             ? []
             : content.windows.filter { excludingWindowIDs.contains($0.windowID) }
         let filter = SCContentFilter(display: display, excludingWindows: excluded)
+        return try await capture(filter: filter, sourceRect: sourceRect, scale: scale)
+    }
 
+    /// Builds a reusable content filter once (the expensive `SCShareableContent`
+    /// query) — used by long capture so it isn't re-run on every frame.
+    func makeFilter(
+        displayID: CGDirectDisplayID,
+        excludingWindowIDs: [CGWindowID] = []
+    ) async throws -> SCContentFilter {
+        guard hasPermission() else { throw CaptureError.permissionDenied }
+        let content = try await SCShareableContent.excludingDesktopWindows(
+            false,
+            onScreenWindowsOnly: false
+        )
+        guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
+            throw CaptureError.displayNotFound
+        }
+        let excluded = excludingWindowIDs.isEmpty
+            ? []
+            : content.windows.filter { excludingWindowIDs.contains($0.windowID) }
+        return SCContentFilter(display: display, excludingWindows: excluded)
+    }
+
+    /// Captures one frame using a pre-built filter (no per-frame system query).
+    func capture(filter: SCContentFilter, sourceRect: CGRect, scale: CGFloat) async throws -> CGImage {
+        guard sourceRect.width >= 1, sourceRect.height >= 1 else {
+            throw CaptureError.emptyRegion
+        }
         let config = SCStreamConfiguration()
         config.sourceRect = sourceRect
         config.width = max(1, Int((sourceRect.width * scale).rounded()))
