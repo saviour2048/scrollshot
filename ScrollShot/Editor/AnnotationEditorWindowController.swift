@@ -57,8 +57,9 @@ final class AnnotationEditorWindowController {
 
         let displayWidth = CGFloat(image.width) / max(1, scale)
         let displayHeight = CGFloat(image.height) / max(1, scale)
-        let contentWidth = min(max(displayWidth, barSize.width) + 40, 1000)
-        let contentHeight = min(displayHeight + barSize.height + 40, 860)
+        // Keep the editor compact (it scrolls); never a huge full-width bar.
+        let contentWidth = min(max(displayWidth, barSize.width) + 40, 540)
+        let contentHeight = max(420, min(displayHeight + barSize.height + 40, 760))
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: contentWidth, height: contentHeight),
@@ -69,7 +70,13 @@ final class AnnotationEditorWindowController {
         window.title = "长截图 — 编辑后保存到桌面"
         window.contentView = container
         window.isReleasedWhenClosed = false
-        window.center()
+        // Dock to the bottom-left rather than dominating the screen.
+        if let screen = NSScreen.main {
+            let visible = screen.visibleFrame
+            window.setFrameOrigin(CGPoint(x: visible.minX + 24, y: visible.minY + 24))
+        } else {
+            window.center()
+        }
         self.window = window
 
         NSApp.activate(ignoringOtherApps: true)

@@ -16,7 +16,7 @@ final class LongCapturePanel {
 
     init() {
         window = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 240, height: 280),
+            contentRect: NSRect(x: 0, y: 0, width: 200, height: 210),
             styleMask: [.titled, .nonactivatingPanel, .utilityWindow],
             backing: .buffered,
             defer: false
@@ -105,7 +105,7 @@ final class LongCapturePanel {
             stack.bottomAnchor.constraint(equalTo: content.bottomAnchor),
             statusLabel.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24),
             previewView.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24),
-            previewView.heightAnchor.constraint(equalToConstant: 150),
+            previewView.heightAnchor.constraint(equalToConstant: 90),
             autoButton.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24),
             actionRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24)
         ])
