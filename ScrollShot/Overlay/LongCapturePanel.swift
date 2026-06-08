@@ -4,8 +4,8 @@ import AppKit
 /// capture: live preview, progress, an 自动滚动 button, and 完成 / 取消.
 /// Excluded from the capture so it never appears in the stitched image.
 ///
-/// Uses manual frames + a locked window size so the preview image can never
-/// blow the window up to full width.
+/// Built with a stack view (reliable control rendering) but with the window
+/// size locked, so a wide preview image can never blow it up to full width.
 final class LongCapturePanel {
     var onAuto: (() -> Void)?
     var onFinish: (() -> Void)?
@@ -13,9 +13,9 @@ final class LongCapturePanel {
 
     let window: NSPanel
 
-    private static let panelSize = NSSize(width: 220, height: 244)
+    private static let panelSize = NSSize(width: 224, height: 252)
 
-    private let statusLabel = NSTextField(labelWithString: "向下滚动页面…")
+    private let statusLabel = NSTextField(labelWithString: "向下慢慢滚动页面…")
     private let previewView = NSImageView()
     private let autoButton = NSButton()
     private let finishButton = NSButton()
@@ -32,10 +32,9 @@ final class LongCapturePanel {
         window.isFloatingPanel = true
         window.level = .floating
         window.hidesOnDeactivate = false
-        // Lock the size so nothing (e.g. a wide preview image) can resize it.
+        // Lock the size so a wide preview image can't resize the window.
         window.contentMinSize = Self.panelSize
         window.contentMaxSize = Self.panelSize
-        window.setContentSize(Self.panelSize)
         buildUI()
     }
 
@@ -45,7 +44,6 @@ final class LongCapturePanel {
     }
 
     func show(atBottomLeftOf screen: NSScreen) {
-        window.setContentSize(Self.panelSize)
         let visible = screen.visibleFrame
         let margin: CGFloat = 16
         window.setFrameOrigin(CGPoint(x: visible.minX + margin, y: visible.minY + margin))
@@ -70,44 +68,30 @@ final class LongCapturePanel {
         window.orderOut(nil)
     }
 
-    // MARK: UI (manual frames, content view is non-flipped / bottom-left origin)
-
     private func buildUI() {
         guard let content = window.contentView else { return }
         content.appearance = NSAppearance(named: .darkAqua)
-
-        let pad: CGFloat = 12
-        let w = Self.panelSize.width - pad * 2          // 196
-        let h = Self.panelSize.height                    // 244
 
         statusLabel.font = .systemFont(ofSize: 12)
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.maximumNumberOfLines = 2
         statusLabel.lineBreakMode = .byWordWrapping
-        statusLabel.frame = NSRect(x: pad, y: h - 10 - 34, width: w, height: 34)
-        content.addSubview(statusLabel)
 
         previewView.imageScaling = .scaleProportionallyUpOrDown
         previewView.imageAlignment = .alignTop
         previewView.wantsLayer = true
         previewView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.25).cgColor
         previewView.layer?.cornerRadius = 6
-        previewView.frame = NSRect(x: pad, y: 90, width: w, height: 96)
-        content.addSubview(previewView)
+        // Never let the (possibly very wide) image drive layout.
+        previewView.setContentHuggingPriority(.init(1), for: .horizontal)
+        previewView.setContentHuggingPriority(.init(1), for: .vertical)
+        previewView.setContentCompressionResistancePriority(.init(1), for: .horizontal)
+        previewView.setContentCompressionResistancePriority(.init(1), for: .vertical)
 
         autoButton.title = "自动滚动"
         autoButton.bezelStyle = .rounded
         autoButton.target = self
         autoButton.action = #selector(autoTapped)
-        autoButton.frame = NSRect(x: pad, y: 54, width: w, height: 28)
-        content.addSubview(autoButton)
-
-        cancelButton.title = "取消"
-        cancelButton.bezelStyle = .rounded
-        cancelButton.target = self
-        cancelButton.action = #selector(cancelTapped)
-        cancelButton.frame = NSRect(x: pad, y: 16, width: (w - 8) / 2, height: 28)
-        content.addSubview(cancelButton)
 
         finishButton.title = "完成"
         finishButton.bezelStyle = .rounded
@@ -115,8 +99,35 @@ final class LongCapturePanel {
         finishButton.keyEquivalent = "\r"
         finishButton.target = self
         finishButton.action = #selector(finishTapped)
-        finishButton.frame = NSRect(x: pad + (w - 8) / 2 + 8, y: 16, width: (w - 8) / 2, height: 28)
-        content.addSubview(finishButton)
+
+        cancelButton.title = "取消"
+        cancelButton.bezelStyle = .rounded
+        cancelButton.target = self
+        cancelButton.action = #selector(cancelTapped)
+
+        let actionRow = NSStackView(views: [cancelButton, finishButton])
+        actionRow.orientation = .horizontal
+        actionRow.distribution = .fillEqually
+        actionRow.spacing = 8
+
+        let stack = NSStackView(views: [statusLabel, previewView, autoButton, actionRow])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: content.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            previewView.heightAnchor.constraint(equalToConstant: 96),
+            statusLabel.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24),
+            previewView.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24),
+            autoButton.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24),
+            actionRow.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24)
+        ])
     }
 
     @objc private func autoTapped() { onAuto?() }

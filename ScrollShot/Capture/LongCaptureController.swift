@@ -99,7 +99,9 @@ final class LongCaptureController {
                 guard self.active else { return }
                 let grew = self.stitcher.add(frame)
                 self.tickCount += 1
-                let preview = (self.tickCount % 3 == 0) ? self.stitcher.result().map(ImageUtils.nsImage) : nil
+                // Cheap live preview: show the latest frame, NOT the full growing
+                // stitch (composing it every tick was the source of the lag).
+                let preview = (self.tickCount % 2 == 0) ? ImageUtils.nsImage(from: frame) : nil
                 self.panel?.update(height: self.stitcher.totalHeight, frames: self.stitcher.frameCount, preview: preview)
                 if self.auto { self.checkAutoStop(grew: grew) }
             } catch {
