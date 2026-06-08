@@ -7,7 +7,7 @@ import CoreGraphics
 ///
 /// Geometry: the view is flipped (top-left) and sized in points = pixels/scale,
 /// so annotations map to image pixels via `* scale` on export.
-final class AnnotationEditorView: NSView, NSTextFieldDelegate {
+final class AnnotationEditorView: NSView {
     private enum Mode { case idle, drawing, moving }
 
     private let baseCGImage: CGImage
@@ -25,8 +25,7 @@ final class AnnotationEditorView: NSView, NSTextFieldDelegate {
     private var currentColor: NSColor = .systemRed
     private var currentWidth: CGFloat = 4
 
-    private var activeTextField: NSTextField?
-    private var textOrigin: CGPoint = .zero
+    private var textBox: TextBoxEditor?
 
     private lazy var pixelatedImage: NSImage? = {
         guard let cg = ImageUtils.pixelated(baseCGImage) else { return nil }
@@ -55,8 +54,8 @@ final class AnnotationEditorView: NSView, NSTextFieldDelegate {
     // MARK: External controls (wired from the toolbar)
 
     func selectTool(_ tool: AnnotationTool) { currentTool = tool; window?.invalidateCursorRects(for: self) }
-    func setColor(_ color: NSColor) { currentColor = color; restyleActiveTextField() }
-    func setWidth(_ width: CGFloat) { currentWidth = width; restyleActiveTextField() }
+    func setColor(_ color: NSColor) { currentColor = color; restyleTextBox() }
+    func setWidth(_ width: CGFloat) { currentWidth = width; restyleTextBox() }
 
     func undo() {
         guard !annotations.isEmpty else { return }
@@ -66,14 +65,14 @@ final class AnnotationEditorView: NSView, NSTextFieldDelegate {
 
     @discardableResult
     func save() -> URL? {
-        commitActiveText()
+        commitTextBox()
         guard let image = outputImage() else { return nil }
         ImageUtils.copyToPasteboard(image)
         return try? ImageUtils.saveToDesktop(image)
     }
 
     func copy() {
-        commitActiveText()
+        commitTextBox()
         guard let image = outputImage() else { return }
         ImageUtils.copyToPasteboard(image)
     }
@@ -91,7 +90,7 @@ final class AnnotationEditorView: NSView, NSTextFieldDelegate {
     // MARK: Mouse
 
     override func mouseDown(with event: NSEvent) {
-        commitActiveText()
+        commitTextBox()
         let point = convert(event.locationInWindow, from: nil)
         if let index = hitTestAnnotation(at: point) {
             mode = .moving
@@ -161,7 +160,7 @@ final class AnnotationEditorView: NSView, NSTextFieldDelegate {
         case .ellipse: shape = .ellipse(CGRect(origin: point, size: .zero))
         case .mosaic: shape = .mosaic(CGRect(origin: point, size: .zero))
         case .pen: shape = .pen([point])
-        case .text: shape = .text(origin: point, string: "", fontSize: 18)
+        case .text: shape = .text(rect: CGRect(origin: point, size: .zero), string: "", fontSize: textFontSize(for: currentWidth))
         }
         return Annotation(shape: shape, color: currentColor, lineWidth: currentWidth)
     }
@@ -202,86 +201,41 @@ final class AnnotationEditorView: NSView, NSTextFieldDelegate {
         CGPoint(x: min(max(point.x, 0), bounds.width), y: min(max(point.y, 0), bounds.height))
     }
 
-    // MARK: Text
-
-    private func beginTextEditing(at point: CGPoint) {
-        let fontSize = textFontSize(for: currentWidth)
-        let field = NSTextField(frame: CGRect(x: point.x, y: point.y, width: 120, height: fontSize + 10))
-        field.font = .systemFont(ofSize: fontSize, weight: .semibold)
-        field.textColor = currentColor
-        field.drawsBackground = false
-        field.isBordered = false
-        field.focusRingType = .none
-        field.placeholderString = "输入文字，回车确认"
-        field.delegate = self
-        field.cell?.wraps = false
-        field.cell?.isScrollable = false
-        field.usesSingleLineMode = true
-        addSubview(field)
-        window?.makeFirstResponder(field)
-        activeTextField = field
-        textOrigin = point
-    }
-
     private func textFontSize(for width: CGFloat) -> CGFloat { 12 + width * 2.5 }
 
-    /// Grows the active text field to fit its text so characters never get clipped.
-    func controlTextDidChange(_ obj: Notification) {
-        resizeActiveTextField()
-    }
+    // MARK: Text boxes
 
-    private func resizeActiveTextField() {
-        guard let field = activeTextField, let font = field.font else { return }
-        let text = field.stringValue.isEmpty ? (field.placeholderString ?? "") : field.stringValue
-        let width = (text as NSString).size(withAttributes: [.font: font]).width
-        var frame = field.frame
-        frame.size.width = min(max(100, width + 18), max(100, bounds.width - frame.minX - 4))
-        frame.size.height = font.pointSize + 10
-        field.frame = frame
-    }
-
-    private func restyleActiveTextField() {
-        guard let field = activeTextField else { return }
-        field.textColor = currentColor
-        field.font = .systemFont(ofSize: textFontSize(for: currentWidth), weight: .semibold)
-        resizeActiveTextField()
-        needsDisplay = true
-    }
-
-    private func commitActiveText() {
-        guard let field = activeTextField else { return }
-        activeTextField = nil
-        let text = field.stringValue
-        let color = field.textColor ?? currentColor
-        let fontSize = field.font?.pointSize ?? 18
-        field.removeFromSuperview()
-        guard !text.isEmpty else { return }
-        annotations.append(Annotation(
-            shape: .text(origin: CGPoint(x: textOrigin.x + 2, y: textOrigin.y + 3),
-                         string: text, fontSize: fontSize),
-            color: color,
-            lineWidth: currentWidth
-        ))
-        needsDisplay = true
-    }
-
-    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
-        if selector == #selector(NSResponder.insertNewline(_:)) {
-            commitActiveText()
-            window?.makeFirstResponder(self)
-            return true
+    private func beginTextEditing(at point: CGPoint) {
+        commitTextBox()
+        let fontSize = textFontSize(for: currentWidth)
+        let box = TextBoxEditor(
+            frame: CGRect(x: point.x, y: point.y, width: 180, height: max(48, fontSize * 2)),
+            fontSize: fontSize,
+            color: currentColor
+        )
+        box.onCommit = { [weak self] rect, string, size, color in
+            guard let self else { return }
+            self.annotations.append(Annotation(
+                shape: .text(rect: rect, string: string, fontSize: size),
+                color: color,
+                lineWidth: self.currentWidth
+            ))
+            self.needsDisplay = true
         }
-        if selector == #selector(NSResponder.cancelOperation(_:)) {
-            activeTextField?.removeFromSuperview()
-            activeTextField = nil
-            window?.makeFirstResponder(self)
-            return true
-        }
-        return false
+        box.onFinished = { [weak self] in self?.textBox = nil }
+        addSubview(box)
+        textBox = box
+        box.focus()
     }
 
-    func controlTextDidEndEditing(_ obj: Notification) {
-        commitActiveText()
+    private func commitTextBox() {
+        textBox?.commit()
+        textBox = nil
+    }
+
+    private func restyleTextBox() {
+        textBox?.setColor(currentColor)
+        textBox?.setFontSize(textFontSize(for: currentWidth))
     }
 
     // MARK: Output

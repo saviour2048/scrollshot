@@ -21,7 +21,8 @@ struct Annotation {
         case rectangle(CGRect)
         case ellipse(CGRect)
         case pen([CGPoint])
-        case text(origin: CGPoint, string: String, fontSize: CGFloat)
+        /// A text box: the string is wrapped/clipped inside `rect`.
+        case text(rect: CGRect, string: String, fontSize: CGFloat)
         case mosaic(CGRect)
     }
 
@@ -62,13 +63,17 @@ struct Annotation {
             color.setStroke()
             path.stroke()
 
-        case let .text(origin, string, fontSize):
+        case let .text(rect, string, fontSize):
             guard !string.isEmpty else { return }
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.lineBreakMode = .byWordWrapping
             let attributes: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
-                .foregroundColor: color
+                .foregroundColor: color,
+                .paragraphStyle: paragraph
             ]
-            (string as NSString).draw(at: origin, withAttributes: attributes)
+            // Wraps within the box width and across explicit newlines.
+            (string as NSString).draw(in: rect, withAttributes: attributes)
 
         case let .mosaic(rect):
             guard let pixelatedImage else { return }
@@ -95,11 +100,8 @@ struct Annotation {
                 maxX = max(maxX, point.x); maxY = max(maxY, point.y)
             }
             return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
-        case let .text(origin, string, fontSize):
-            let size = (string as NSString).size(withAttributes: [
-                .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold)
-            ])
-            return CGRect(origin: origin, size: size)
+        case let .text(rect, _, _):
+            return rect
         }
     }
 
@@ -124,8 +126,8 @@ struct Annotation {
             return inner.width <= 0 || inner.height <= 0 || !inner.contains(point)
         case let .mosaic(rect):
             return rect.contains(point)
-        case .text:
-            return boundingBox.insetBy(dx: -tol, dy: -tol).contains(point)
+        case let .text(rect, _, _):
+            return rect.insetBy(dx: -tol, dy: -tol).contains(point)
         }
     }
 
@@ -143,8 +145,8 @@ struct Annotation {
             copy.shape = .mosaic(rect.offsetBy(dx: delta.width, dy: delta.height))
         case let .pen(points):
             copy.shape = .pen(points.map { $0.offset(delta) })
-        case let .text(origin, string, fontSize):
-            copy.shape = .text(origin: origin.offset(delta), string: string, fontSize: fontSize)
+        case let .text(rect, string, fontSize):
+            copy.shape = .text(rect: rect.offsetBy(dx: delta.width, dy: delta.height), string: string, fontSize: fontSize)
         }
         return copy
     }

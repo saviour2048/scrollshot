@@ -8,7 +8,7 @@ import CoreGraphics
 ///
 /// Coordinate space: the view is flipped (top-left origin), so selection &
 /// annotation points map directly to frozen-image pixels via `* backingScaleFactor`.
-final class OverlayCanvasView: NSView, NSTextFieldDelegate {
+final class OverlayCanvasView: NSView {
     var onFinish: ((CGImage) -> Void)?
     var onCancel: (() -> Void)?
     var onLongCapture: ((LongCaptureRegion) -> Void)?
@@ -32,8 +32,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     private var currentWidth: CGFloat = 4
 
     private var bar: AnnotationBar?
-    private var activeTextField: NSTextField?
-    private var textOrigin: CGPoint = .zero
+    private var textBox: TextBoxEditor?
 
     private lazy var pixelatedImage: NSImage? = {
         guard let cg = ImageUtils.pixelated(shot.image) else { return nil }
@@ -131,7 +130,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     // MARK: Mouse
 
     override func mouseDown(with event: NSEvent) {
-        commitActiveText()
+        commitTextBox()
         let point = convert(event.locationInWindow, from: nil)
 
         guard let selection = selectionRect else {
@@ -253,7 +252,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         case .ellipse: shape = .ellipse(CGRect(origin: point, size: .zero))
         case .mosaic: shape = .mosaic(CGRect(origin: point, size: .zero))
         case .pen: shape = .pen([point])
-        case .text: shape = .text(origin: point, string: "", fontSize: 18)
+        case .text: shape = .text(rect: CGRect(origin: point, size: .zero), string: "", fontSize: textFontSize(for: currentWidth))
         }
         return Annotation(shape: shape, color: currentColor, lineWidth: currentWidth)
     }
@@ -295,87 +294,42 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
                 y: min(max(point.y, rect.minY), rect.maxY))
     }
 
-    // MARK: Text annotations
-
-    private func beginTextEditing(at point: CGPoint) {
-        let fontSize = textFontSize(for: currentWidth)
-        let field = NSTextField(frame: CGRect(x: point.x, y: point.y, width: 120, height: fontSize + 10))
-        field.font = .systemFont(ofSize: fontSize, weight: .semibold)
-        field.textColor = currentColor
-        field.drawsBackground = false
-        field.isBordered = false
-        field.focusRingType = .none
-        field.placeholderString = "输入文字，回车确认"
-        field.delegate = self
-        field.cell?.wraps = false
-        field.cell?.isScrollable = false
-        field.usesSingleLineMode = true
-        addSubview(field)
-        window?.makeFirstResponder(field)
-        activeTextField = field
-        textOrigin = point
-    }
-
     private func textFontSize(for width: CGFloat) -> CGFloat { 12 + width * 2.5 }
 
-    /// Grows the active text field to fit its text so characters never get clipped.
-    func controlTextDidChange(_ obj: Notification) {
-        resizeActiveTextField()
-    }
+    // MARK: Text boxes
 
-    private func resizeActiveTextField() {
-        guard let field = activeTextField, let font = field.font else { return }
-        let text = field.stringValue.isEmpty ? (field.placeholderString ?? "") : field.stringValue
-        let width = (text as NSString).size(withAttributes: [.font: font]).width
-        var frame = field.frame
-        frame.size.width = min(max(100, width + 18), max(100, bounds.width - frame.minX - 4))
-        frame.size.height = font.pointSize + 10
-        field.frame = frame
-    }
-
-    /// Re-applies the current color / font size to the text being edited.
-    private func restyleActiveTextField() {
-        guard let field = activeTextField else { return }
-        field.textColor = currentColor
-        field.font = .systemFont(ofSize: textFontSize(for: currentWidth), weight: .semibold)
-        resizeActiveTextField()
-        needsDisplay = true
-    }
-
-    private func commitActiveText() {
-        guard let field = activeTextField else { return }
-        activeTextField = nil
-        let text = field.stringValue
-        let color = field.textColor ?? currentColor
-        let fontSize = field.font?.pointSize ?? 18
-        field.removeFromSuperview()
-        guard !text.isEmpty else { return }
-        let origin = CGPoint(x: textOrigin.x + 2, y: textOrigin.y + 3)
-        annotations.append(Annotation(
-            shape: .text(origin: origin, string: text, fontSize: fontSize),
-            color: color,
-            lineWidth: currentWidth
-        ))
-        needsDisplay = true
-    }
-
-    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
-        if selector == #selector(NSResponder.insertNewline(_:)) {
-            commitActiveText()
-            window?.makeFirstResponder(self)
-            return true
+    private func beginTextEditing(at point: CGPoint) {
+        commitTextBox()
+        let fontSize = textFontSize(for: currentWidth)
+        let box = TextBoxEditor(
+            frame: CGRect(x: point.x, y: point.y, width: 180, height: max(48, fontSize * 2)),
+            fontSize: fontSize,
+            color: currentColor
+        )
+        box.onCommit = { [weak self] rect, string, size, color in
+            guard let self else { return }
+            self.annotations.append(Annotation(
+                shape: .text(rect: rect, string: string, fontSize: size),
+                color: color,
+                lineWidth: self.currentWidth
+            ))
+            self.needsDisplay = true
         }
-        if selector == #selector(NSResponder.cancelOperation(_:)) {
-            activeTextField?.removeFromSuperview()
-            activeTextField = nil
-            window?.makeFirstResponder(self)
-            return true
-        }
-        return false
+        box.onFinished = { [weak self] in self?.textBox = nil }
+        addSubview(box)
+        textBox = box
+        box.focus()
     }
 
-    func controlTextDidEndEditing(_ obj: Notification) {
-        commitActiveText()
+    /// Finish the active text box (if any).
+    private func commitTextBox() {
+        textBox?.commit()
+        textBox = nil
+    }
+
+    private func restyleTextBox() {
+        textBox?.setColor(currentColor)
+        textBox?.setFontSize(textFontSize(for: currentWidth))
     }
 
     // MARK: Toolbar
@@ -396,11 +350,11 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
         }
         bar.onColor = { [weak self] color in
             self?.currentColor = color
-            self?.restyleActiveTextField()
+            self?.restyleTextBox()
         }
         bar.onWidth = { [weak self] width in
             self?.currentWidth = width
-            self?.restyleActiveTextField()
+            self?.restyleTextBox()
             self?.restoreFocus()
         }
         bar.onUndo = { [weak self] in
@@ -420,7 +374,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
 
     /// Make the canvas first responder again unless a text field is being edited.
     private func restoreFocus() {
-        guard activeTextField == nil else { return }
+        guard textBox == nil else { return }
         window?.makeFirstResponder(self)
     }
 
@@ -447,13 +401,13 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     // MARK: Output
 
     private func confirmSave() {
-        commitActiveText()
+        commitTextBox()
         guard let image = outputImage() else { onCancel?(); return }
         onFinish?(image)
     }
 
     private func confirmCopy() {
-        commitActiveText()
+        commitTextBox()
         guard let image = outputImage() else { onCancel?(); return }
         ImageUtils.copyToPasteboard(image)
         onCancel?()
@@ -461,7 +415,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
 
     /// Hands the chosen region off to long (scroll) capture.
     private func requestLongCapture() {
-        commitActiveText()
+        commitTextBox()
         guard let rect = selectionRect,
               rect.width >= 1, rect.height >= 1,
               let displayID = shot.screen.displayID else { onCancel?(); return }
