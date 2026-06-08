@@ -31,4 +31,9 @@ enum AppConfig {
     static let screenRecordingSettingsURL = URL(
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
     )
+
+    /// Deep link to System Settings ▸ Privacy & Security ▸ Accessibility.
+    static let accessibilitySettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+    )
 }
