@@ -336,8 +336,7 @@ final class OverlayCanvasView: NSView, NSTextFieldDelegate {
     }
 
     private func positionBar(_ bar: AnnotationBar, for rect: CGRect) {
-        bar.layoutSubtreeIfNeeded()
-        let size = bar.fittingSize
+        let size = bar.contentSize
         let gap: CGFloat = 8
         var origin = CGPoint(x: rect.minX, y: rect.maxY + gap)
         if origin.y + size.height > bounds.height {

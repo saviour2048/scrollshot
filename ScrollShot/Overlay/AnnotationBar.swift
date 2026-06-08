@@ -16,6 +16,7 @@ final class AnnotationBar: NSView {
 
     private var toolButtons: [AnnotationTool: NSButton] = [:]
     private let colorWell = NSColorWell()
+    private let stack = NSStackView()
 
     init() {
         super.init(frame: .zero)
@@ -30,6 +31,18 @@ final class AnnotationBar: NSView {
 
     var currentColor: NSColor { colorWell.color }
     var currentWidth: CGFloat { Self.widthValues[1] }
+
+    /// The natural size of the toolbar content. Computed from the stack itself
+    /// (not tied to this view's frame) so it is never collapsed to zero.
+    var contentSize: NSSize {
+        stack.layoutSubtreeIfNeeded()
+        return stack.fittingSize
+    }
+
+    override func layout() {
+        super.layout()
+        stack.frame = bounds
+    }
 
     private func buildUI() {
         var views: [NSView] = []
@@ -65,19 +78,16 @@ final class AnnotationBar: NSView {
         views.append(actionButton(title: "复制", action: #selector(copyTapped)))
         views.append(actionButton(title: "取消", action: #selector(cancelTapped)))
 
-        let stack = NSStackView(views: views)
+        views.forEach { stack.addArrangedSubview($0) }
         stack.orientation = .horizontal
         stack.alignment = .centerY
         stack.spacing = 6
         stack.edgeInsets = NSEdgeInsets(top: 6, left: 10, bottom: 6, right: 10)
-        stack.translatesAutoresizingMaskIntoConstraints = false
+        // Don't let any control be compressed out of view; the bar is sized to
+        // the stack's full content via `contentSize`.
+        stack.setHuggingPriority(.required, for: .horizontal)
+        stack.setClippingResistancePriority(.required, for: .horizontal)
         addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
-            stack.topAnchor.constraint(equalTo: topAnchor),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor)
-        ])
     }
 
     func setActiveTool(_ tool: AnnotationTool?) {
