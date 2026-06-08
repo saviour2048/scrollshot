@@ -27,10 +27,10 @@ final class AnnotationBar: NSView {
         self.showsLongCapture = showsLongCapture
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 13
+        layer?.cornerRadius = 18                                             // capsule-like (Apple Music feel)
         layer?.masksToBounds = true
         layer?.borderWidth = 1
-        layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor  // glass highlight edge
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.14).cgColor  // glass highlight edge
         // Standard controls render in dark mode for contrast on the glass.
         appearance = NSAppearance(named: .darkAqua)
         buildUI()
