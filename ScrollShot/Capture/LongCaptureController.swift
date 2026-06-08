@@ -72,19 +72,16 @@ final class LongCaptureController {
 
     private func enableAuto() {
         guard active else { return }
-        if !AutoScroller.isTrusted() {
-            // Don't spam the system prompt on every click — just open the settings
-            // and tell the user to grant + relaunch.
-            panel?.note("自动滚动需要「辅助功能」权限:在打开的设置里勾选 ScrollShot,然后退出并重新运行 App,再点「自动滚动」。")
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                NSWorkspace.shared.open(url)
-            }
-            return
-        }
+        // Don't gate on AXIsProcessTrusted() — it often false-reports "not trusted"
+        // for Xcode-run apps. Just try to scroll; if Accessibility is actually
+        // granted the events work, otherwise the first post triggers the system
+        // prompt. Show a hint either way.
         auto = true
         noGrowthCount = 0
         panel?.setAuto(true)
-        panel?.note("自动滚动中…到底会自动停止。")
+        panel?.note(AutoScroller.isTrusted()
+                    ? "自动滚动中…到底会自动停止。"
+                    : "自动滚动中…若页面没动,请到 系统设置▸隐私▸辅助功能 勾选 ScrollShot 并重启 App。")
     }
 
     private func tick() {
