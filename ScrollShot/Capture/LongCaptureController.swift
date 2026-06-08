@@ -12,6 +12,8 @@ final class LongCaptureController {
 
     private let capturer = ScreenCapturer()
     private let stitcher = FrameStitcher()
+    /// All `stitcher` access (add / result) happens here, off the main thread.
+    private let stitchQueue = DispatchQueue(label: "com.scrollshot.stitch")
 
     private var panel: LongCapturePanel?
     private var timer: Timer?
@@ -35,7 +37,8 @@ final class LongCaptureController {
         active = true
         auto = false
         self.region = region
-        stitcher.reset()
+        let stitcher = self.stitcher
+        stitchQueue.async { stitcher.reset() }   // serialized before any add
         tickCount = 0
         noGrowthCount = 0
 
@@ -103,33 +106,40 @@ final class LongCaptureController {
     private func captureFrame() {
         guard active, !frameInFlight, let region, let filter else { return }
         frameInFlight = true
+        let stitcher = self.stitcher
+        let sourceRect = region.sourceRect
+        let scale = region.scale
+        let isAuto = auto
+        let showPreview = (tickCount % 2 == 0)
+        tickCount += 1
 
         Task { [weak self] in
             guard let self else { return }
-            defer { self.frameInFlight = false }
             do {
-                let frame = try await self.capturer.capture(
-                    filter: filter,
-                    sourceRect: region.sourceRect,
-                    scale: region.scale
-                )
-                guard self.active else { return }
-                let grew = self.stitcher.add(frame)
-                self.tickCount += 1
-                // Cheap live preview: show the latest frame, NOT the full growing
-                // stitch (composing it every tick was the source of the lag).
-                let preview = (self.tickCount % 2 == 0) ? ImageUtils.nsImage(from: frame) : nil
-                self.panel?.update(height: self.stitcher.totalHeight, frames: self.stitcher.frameCount, preview: preview)
-                if self.auto { self.checkAutoStop(grew: grew) }
+                let frame = try await self.capturer.capture(filter: filter, sourceRect: sourceRect, scale: scale)
+                // Stitch off the main thread so scrolling / UI stays smooth.
+                self.stitchQueue.async {
+                    let grew = stitcher.add(frame)
+                    let height = stitcher.totalHeight
+                    let frames = stitcher.frameCount
+                    let preview = showPreview ? ImageUtils.nsImage(from: frame) : nil
+                    Task { @MainActor in
+                        self.frameInFlight = false
+                        guard self.active else { return }
+                        self.panel?.update(height: height, frames: frames, preview: preview)
+                        if isAuto { self.checkAutoStop(grew: grew, frames: frames) }
+                    }
+                }
             } catch {
                 NSLog("ScrollShot: long capture frame failed: \(error.localizedDescription)")
+                self.frameInFlight = false
             }
         }
     }
 
-    private func checkAutoStop(grew: Bool) {
-        if stitcher.frameCount >= maxFrames { finish(); return }
-        guard stitcher.frameCount > 2 else { return }
+    private func checkAutoStop(grew: Bool, frames: Int) {
+        if frames >= maxFrames { finish(); return }
+        guard frames > 2 else { return }
         noGrowthCount = grew ? 0 : (noGrowthCount + 1)
         if noGrowthCount >= autoStopIdleTicks { finish() }
     }
@@ -141,17 +151,23 @@ final class LongCaptureController {
         stopTimer()
         active = false
         let scale = region?.scale ?? 2
-        let result = stitcher.result()
+        let stitcher = self.stitcher
         panel?.close()
         panel = nil
         region = nil
         filter = nil
 
-        guard let result else {
-            presentInfo("没有捕获到内容。请重试,记得向下滚动页面。")
-            return
+        // Compose on the stitch queue so any in-flight `add`s finish first.
+        stitchQueue.async {
+            let result = stitcher.result()
+            Task { @MainActor in
+                guard let result else {
+                    self.presentInfo("没有捕获到内容。请重试,记得向下滚动页面。")
+                    return
+                }
+                AnnotationEditorWindowController.shared.open(image: result, scale: scale)
+            }
         }
-        AnnotationEditorWindowController.shared.open(image: result, scale: scale)
     }
 
     private func cancel() {
