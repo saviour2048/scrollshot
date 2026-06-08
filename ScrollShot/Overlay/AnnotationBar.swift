@@ -137,6 +137,8 @@ final class AnnotationBar: NSView {
 
     private func toolButton(symbol: String, tip: String, tag: Int) -> NSButton {
         let button = NSButton()
+        button.title = ""                       // no default "按钮" title
+        button.imagePosition = .imageOnly
         button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: tip)
         button.imageScaling = .scaleProportionallyDown
         button.isBordered = false
