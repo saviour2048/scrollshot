@@ -27,6 +27,8 @@ targets:
       - path: Stitch
       - path: Selection
       - path: Preferences
+      - path: Models
+      - path: Views
       - path: Resources/Assets.xcassets
     dependencies:
       - package: KeyboardShortcuts
