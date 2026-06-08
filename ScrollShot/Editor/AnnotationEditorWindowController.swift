@@ -67,7 +67,7 @@ final class AnnotationEditorWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "长截图 — 编辑后保存到桌面"
+        window.title = "ScrollShot · 长截图编辑"
         window.contentView = container
         window.isReleasedWhenClosed = false
         // Dock to the bottom-left rather than dominating the screen.

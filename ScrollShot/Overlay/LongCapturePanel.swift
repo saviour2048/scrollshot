@@ -21,7 +21,7 @@ final class LongCapturePanel {
             backing: .buffered,
             defer: false
         )
-        window.title = "长截图"
+        window.title = "ScrollShot · 长截图预览"
         window.isFloatingPanel = true
         window.level = .floating
         window.hidesOnDeactivate = false
