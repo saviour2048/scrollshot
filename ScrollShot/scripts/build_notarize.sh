@@ -45,14 +45,18 @@ xcodebuild -exportArchive -archivePath "$ARCHIVE" \
   -exportOptionsPlist scripts/ExportOptions.plist \
   -exportPath "$EXPORT_DIR"
 
-echo "▸ Zipping for notarization…"
-ditto -c -k --keepParent "$APP" "$ZIP"
+if [ -n "${SKIP_NOTARIZE:-}" ]; then
+  echo "▸ SKIP_NOTARIZE set — skipping notarization (DMG will be signed but not notarized)."
+else
+  echo "▸ Zipping for notarization…"
+  ditto -c -k --keepParent "$APP" "$ZIP"
 
-echo "▸ Submitting to Apple notary service (this can take a few minutes)…"
-xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+  echo "▸ Submitting to Apple notary service (this can take a few minutes)…"
+  xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
 
-echo "▸ Stapling ticket…"
-xcrun stapler staple "$APP"
+  echo "▸ Stapling ticket…"
+  xcrun stapler staple "$APP"
+fi
 
 echo "▸ Building DMG…"
 rm -f "$DMG"
