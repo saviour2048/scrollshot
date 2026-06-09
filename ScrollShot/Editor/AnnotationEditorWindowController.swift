@@ -35,21 +35,39 @@ final class AnnotationEditorWindowController {
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = true
         scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false          // let the glass show through
         scrollView.documentView = editor
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
         let barSize = bar.contentSize
         bar.translatesAutoresizingMaskIntoConstraints = false
 
+        // Liquid Glass window background (glass on Tahoe; vibrancy on older).
+        let glass = NSVisualEffectView()
+        glass.material = .windowBackground
+        glass.blendingMode = .behindWindow
+        glass.state = .active
+        glass.translatesAutoresizingMaskIntoConstraints = false
+
+        let titleStrip: CGFloat = 38            // clears the transparent title bar / traffic lights
+        let topInset = titleStrip + barSize.height + 14
+
         let container = NSView()
-        container.addSubview(bar)
+        container.addSubview(glass)
         container.addSubview(scrollView)
+        container.addSubview(bar)                 // toolbar floats above the content
         NSLayoutConstraint.activate([
-            bar.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
+            glass.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            glass.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            glass.topAnchor.constraint(equalTo: container.topAnchor),
+            glass.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+
+            bar.topAnchor.constraint(equalTo: container.topAnchor, constant: titleStrip),
             bar.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             bar.widthAnchor.constraint(equalToConstant: barSize.width),
             bar.heightAnchor.constraint(equalToConstant: barSize.height),
-            scrollView.topAnchor.constraint(equalTo: bar.bottomAnchor, constant: 10),
+
+            scrollView.topAnchor.constraint(equalTo: container.topAnchor, constant: topInset),
             scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor)
@@ -59,15 +77,19 @@ final class AnnotationEditorWindowController {
         let displayHeight = CGFloat(image.height) / max(1, scale)
         // Keep the editor compact (it scrolls); never a huge full-width bar.
         let contentWidth = min(max(displayWidth, barSize.width) + 40, 540)
-        let contentHeight = max(420, min(displayHeight + barSize.height + 40, 760))
+        let contentHeight = max(440, min(displayHeight + topInset + 24, 780))
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: contentWidth, height: contentHeight),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "ScrollShot · 长截图编辑"
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.contentView = container
         window.isReleasedWhenClosed = false
         // Dock to the bottom-left rather than dominating the screen.

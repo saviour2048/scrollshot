@@ -113,17 +113,22 @@ final class OverlayCanvasView: NSView {
     private func drawSizeLabel(for rect: CGRect) {
         let label = "\(Int(rect.width.rounded())) × \(Int(rect.height.rounded()))" as NSString
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold),
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
             .foregroundColor: NSColor.white
         ]
-        let size = label.size(withAttributes: attributes)
-        let padding: CGFloat = 6
-        var origin = CGPoint(x: rect.minX, y: rect.minY - size.height - padding)
-        if origin.y < 0 { origin.y = rect.minY + padding }
-        let background = CGRect(x: origin.x - padding / 2, y: origin.y - padding / 2,
-                               width: size.width + padding, height: size.height + padding)
-        NSColor.black.withAlphaComponent(0.6).setFill()
-        NSBezierPath(roundedRect: background, xRadius: 4, yRadius: 4).fill()
+        let textSize = label.size(withAttributes: attributes)
+        let padH: CGFloat = 9, padV: CGFloat = 5
+        var origin = CGPoint(x: rect.minX + padH, y: rect.minY - textSize.height - padV * 2 - 6)
+        if origin.y < padV { origin.y = rect.minY + padV + 6 }
+        let pill = CGRect(x: origin.x - padH, y: origin.y - padV,
+                          width: textSize.width + padH * 2, height: textSize.height + padV * 2)
+        // Frosted dark pill (glass-like) with a thin highlight edge.
+        NSColor.black.withAlphaComponent(0.55).setFill()
+        let path = NSBezierPath(roundedRect: pill, xRadius: pill.height / 2, yRadius: pill.height / 2)
+        path.fill()
+        NSColor.white.withAlphaComponent(0.18).setStroke()
+        path.lineWidth = 1
+        path.stroke()
         label.draw(at: origin, withAttributes: attributes)
     }
 
