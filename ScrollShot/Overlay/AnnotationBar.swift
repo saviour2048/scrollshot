@@ -43,15 +43,20 @@ final class AnnotationBar: NSView {
     var currentWidth: CGFloat { Self.widthValues[1] }
 
     /// The natural size of the toolbar content. Computed from the stack itself
-    /// (not tied to this view's frame) so it is never collapsed to zero.
+    /// (not tied to this view's frame) so it is never collapsed to zero. A small
+    /// slack avoids sub-pixel "conflicting constraints" logs when the stack is
+    /// framed to exactly its fitting size.
     var contentSize: NSSize {
         stack.layoutSubtreeIfNeeded()
-        return stack.fittingSize
+        let size = stack.fittingSize
+        return NSSize(width: ceil(size.width) + 4, height: ceil(size.height) + 2)
     }
 
     override func layout() {
         super.layout()
         glass.frame = bounds
+        // Center the stack within the (slightly larger) bar so the extra slack
+        // is split evenly and never squeezes the arranged controls.
         stack.frame = bounds
     }
 
