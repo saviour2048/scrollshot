@@ -113,10 +113,10 @@ final class AnnotationBar: NSView {
         stack.alignment = .centerY
         stack.spacing = 8
         stack.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
-        // Don't let any control be compressed out of view; the bar is sized to
-        // the stack's full content via `contentSize`.
-        stack.setHuggingPriority(.required, for: .horizontal)
-        stack.setClippingResistancePriority(.required, for: .horizontal)
+        // The stack is sized via manual frame (= bounds, which is >= its content
+        // thanks to the slack in `contentSize`), so it must NOT also pin its size
+        // with .required content priorities — that fights the autoresizing frame
+        // constraint and spams "conflicting constraints".
         addSubview(stack)
     }
 
