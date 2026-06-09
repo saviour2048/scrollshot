@@ -12,7 +12,10 @@ import CoreGraphics
 /// Tunables: `matchThreshold` (lower = stricter), `maxShiftRatio`,
 /// `minOverlapRatio`. If a stitched result ever looks scrambled, the grayscale
 /// row orientation is the first thing to revisit (see `grayscale`).
-final class FrameStitcher {
+// Thread-safety is guaranteed by the caller: every access happens serially on a
+// single dedicated queue (see LongCaptureController.stitchQueue), so it's safe
+// to hand across concurrency boundaries.
+final class FrameStitcher: @unchecked Sendable {
     private let grayWidth = 64
     private let rowSampleStep = 3
     private let maxShiftRatio: CGFloat = 0.8
