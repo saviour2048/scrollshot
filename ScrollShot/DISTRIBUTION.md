@@ -48,3 +48,23 @@ xcrun stapler validate build/export/ScrollShot.app
 ## 升级版本
 
 改 `project.yml` 里的 `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`,再跑一次 `build_notarize.sh`。
+
+---
+
+## 还没公证就想先发?（应急,可用）
+
+公证只决定"对方打开时弹不弹警告"。App 只要**已 Developer ID 签名**(`codesign -dvv` 能看到 `Developer ID Application: …`),就可以现在先发。
+
+**只打包、不公证**(跳过 notarytool/staple):
+```bash
+cd ScrollShot
+hdiutil create -volname ScrollShot -srcfolder build/export/ScrollShot.app -ov -format UDZO build/ScrollShot.dmg
+```
+
+**对方首次打开**(因为没公证,要绕一下 Gatekeeper):
+1. 双击 DMG,把 ScrollShot 拖进「应用程序」。
+2. 第一次打开若被拦:**系统设置 ▸ 隐私与安全性** → 底部"已阻止 ScrollShot" → **仍要打开**;或在「应用程序」里**右键 → 打开**。
+3. 之后正常双击,再授屏幕录制(+自动滚动需辅助功能)。
+
+> ⚠️ 新开发者账号的**首次**公证可能卡 In Progress 很久(数小时~1 天),偶尔要发工单(开发与技术 ▸ 代码签名)让 Apple 推进。等首次公证开通后,以后 `build_notarize.sh` 出的包就**双击零提示**了。
+
