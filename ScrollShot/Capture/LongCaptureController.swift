@@ -77,10 +77,17 @@ final class LongCaptureController {
 
     private func enableAuto() {
         guard active else { return }
-        // Don't gate on AXIsProcessTrusted() — it often false-reports "not trusted"
-        // for Xcode-run apps. Just try to scroll; if Accessibility is actually
-        // granted the events work, otherwise the first post triggers the system
-        // prompt. Show a hint either way.
+        // Auto-scroll posts CGEvents, which the system silently drops unless the
+        // app is trusted for Accessibility. If we're not trusted, scrolling would
+        // do nothing and the user would just get a stub image — so surface it
+        // clearly (prompt + open Settings) instead of failing silently.
+        if !AutoScroller.isTrusted() {
+            AutoScroller.requestTrust()                       // shows the system dialog
+            NSWorkspace.shared.open(AppConfig.accessibilitySettingsURL ?? URL(fileURLWithPath: "/"))
+            panel?.setAuto(false)
+            panel?.note("自动滚动需要「辅助功能」权限。请在系统设置里打开 ScrollShot 开关,然后彻底退出并重新打开 ScrollShot —— 授权对正在运行的进程不会立即生效。期间可继续用滚轮手动滚动。")
+            return
+        }
         auto = true
         didWarpCursor = false
         noGrowthCount = 0
