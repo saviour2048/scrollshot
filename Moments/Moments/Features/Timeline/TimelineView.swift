@@ -8,11 +8,23 @@ struct TimelineView: View {
     @Query(sort: \Tag.createdAt) private var allTags: [Tag]
 
     @State private var showCompose = false
+    @State private var showTagManager = false
     @State private var filterTag: Tag?
+    @State private var searchText = ""
 
     private var filtered: [Entry] {
-        guard let filterTag else { return entries }
-        return entries.filter { ($0.tags ?? []).contains { $0.id == filterTag.id } }
+        var result = entries
+        if let filterTag {
+            result = result.filter { ($0.tags ?? []).contains { $0.id == filterTag.id } }
+        }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty {
+            result = result.filter { entry in
+                entry.text.localizedCaseInsensitiveContains(query)
+                    || entry.tagList.contains { $0.name.localizedCaseInsensitiveContains(query) }
+            }
+        }
+        return result
     }
 
     /// 按自然日分组，日期倒序。
@@ -26,16 +38,20 @@ struct TimelineView: View {
         NavigationStack {
             Group {
                 if filtered.isEmpty {
-                    EmptyTimelineView(isFiltering: filterTag != nil)
+                    EmptyTimelineView(isFiltering: filterTag != nil || !searchText.isEmpty)
                 } else {
                     timeline
                 }
             }
             .navigationTitle("时刻")
             .navigationDestination(for: Entry.self) { EntryDetailView(entry: $0) }
+            .searchable(text: $searchText, prompt: "搜索文字或标签")
             .toolbar { filterToolbar }
             .overlay(alignment: .bottomTrailing) { addButton }
             .sheet(isPresented: $showCompose) { ComposeView() }
+            .sheet(isPresented: $showTagManager) {
+                NavigationStack { TagManagerView() }
+            }
             .task { TagSeeder.seedIfNeeded(context) }
         }
     }
@@ -79,6 +95,12 @@ struct TimelineView: View {
                         Label(tag.name, systemImage: filterTag?.id == tag.id ? "checkmark" : "tag")
                     }
                 }
+                Divider()
+                Button {
+                    showTagManager = true
+                } label: {
+                    Label("管理标签…", systemImage: "slider.horizontal.3")
+                }
             } label: {
                 Image(systemName: filterTag == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
             }
@@ -121,9 +143,9 @@ private struct EmptyTimelineView: View {
     let isFiltering: Bool
     var body: some View {
         ContentUnavailableView {
-            Label(isFiltering ? "这个标签下还没有记录" : "还没有记录", systemImage: "sparkles")
+            Label(isFiltering ? "没有匹配的记录" : "还没有记录", systemImage: "sparkles")
         } description: {
-            Text(isFiltering ? "换个标签，或点右下角「+」记录新内容。" : "点右下角「+」，随手记下此刻的想法吧。")
+            Text(isFiltering ? "换个标签或关键词试试，或点右下角「+」记录新内容。" : "点右下角「+」，随手记下此刻的想法吧。")
         }
     }
 }

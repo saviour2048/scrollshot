@@ -90,26 +90,52 @@ struct MediaThumbnailStrip: View {
     }
 }
 
-/// 单张媒体缩略图（照片直接显示，视频/语音先用图标占位）。
+/// 单张媒体缩略图：照片直接显示，视频异步取首帧 + 播放角标，语音用波形图标。
 struct MediaThumbnail: View {
     let item: MediaItem
     var size: CGFloat = 72
 
+    @State private var videoFrame: UIImage?
+
     var body: some View {
         Group {
-            if item.kind == .photo, let data = item.data, let image = UIImage(data: data) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                ZStack {
-                    Color(.tertiarySystemFill)
-                    Image(systemName: item.kind == .video ? "video.fill" : "waveform")
-                        .foregroundStyle(.secondary)
+            switch item.kind {
+            case .photo:
+                if let data = item.data, let image = UIImage(data: data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    placeholder("photo")
                 }
+            case .video:
+                ZStack {
+                    if let videoFrame {
+                        Image(uiImage: videoFrame)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Color(.tertiarySystemFill)
+                    }
+                    Image(systemName: "play.circle.fill")
+                        .font(.title3)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .black.opacity(0.45))
+                }
+                .task { videoFrame = await VideoThumbnailCache.shared.image(for: item) }
+            case .audio:
+                placeholder("waveform")
             }
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func placeholder(_ symbol: String) -> some View {
+        ZStack {
+            Color(.tertiarySystemFill)
+            Image(systemName: symbol)
+                .foregroundStyle(.secondary)
+        }
     }
 }

@@ -1,6 +1,14 @@
 import SwiftUI
 import SwiftData
 import PhotosUI
+import UniformTypeIdentifiers
+
+/// 记录页里待保存的一个媒体（照片 / 视频 / 语音）。
+struct MediaDraft: Identifiable {
+    let id = UUID()
+    var kind: MediaKind
+    var data: Data
+}
 
 /// 快速记录页，也复用为编辑页（传入 editing）。
 struct ComposeView: View {
@@ -14,19 +22,19 @@ struct ComposeView: View {
     @State private var text: String = ""
     @State private var selectedTagIDs: Set<UUID> = []
     @State private var pickerItems: [PhotosPickerItem] = []
-    /// 待保存的照片：编辑模式下已有的媒体也会先转成这里的 data 一起管理。
-    @State private var photos: [Data] = []
+    /// 待保存的媒体：编辑模式下已有的媒体也会先转成 draft 一起管理。
+    @State private var drafts: [MediaDraft] = []
 
+    @State private var showRecorder = false
     @State private var showNewTag = false
     @State private var newTagName = ""
-    @State private var newTagColor = Tag.palette.first ?? "#5E9EFF"
 
     @FocusState private var textFocused: Bool
 
     private var isEditing: Bool { editing != nil }
 
     private var canSave: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !photos.isEmpty
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !drafts.isEmpty
     }
 
     var body: some View {
@@ -34,7 +42,7 @@ struct ComposeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     textField
-                    photoSection
+                    mediaSection
                     tagSection
                 }
                 .padding()
@@ -51,8 +59,13 @@ struct ComposeView: View {
                         .disabled(!canSave)
                 }
             }
-            .onChange(of: pickerItems) { _, items in loadPickedPhotos(items) }
+            .onChange(of: pickerItems) { _, items in loadPickedItems(items) }
             .onAppear(perform: loadEditingState)
+            .sheet(isPresented: $showRecorder) {
+                AudioRecordSheet { data in
+                    drafts.append(MediaDraft(kind: .audio, data: data))
+                }
+            }
             .alert("新建标签", isPresented: $showNewTag) {
                 TextField("标签名", text: $newTagName)
                 Button("添加", action: addNewTag)
@@ -71,44 +84,80 @@ struct ComposeView: View {
             .onAppear { if !isEditing { textFocused = true } }
     }
 
-    private var photoSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    PhotosPicker(selection: $pickerItems, maxSelectionCount: 9, matching: .images) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "photo.badge.plus")
-                                .font(.title2)
-                            Text("照片")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.secondary)
-                        .frame(width: 80, height: 80)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color(.secondarySystemFill))
-                        )
-                    }
+    private var mediaSection: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                PhotosPicker(selection: $pickerItems, maxSelectionCount: 9,
+                             matching: .any(of: [.images, .videos])) {
+                    addTile(symbol: "photo.badge.plus", title: "照片/视频")
+                }
 
-                    ForEach(Array(photos.enumerated()), id: \.offset) { index, data in
-                        thumbnail(data: data, index: index)
-                    }
+                Button {
+                    showRecorder = true
+                } label: {
+                    addTile(symbol: "mic.badge.plus", title: "语音")
+                }
+                .buttonStyle(.plain)
+
+                ForEach(Array(drafts.enumerated()), id: \.element.id) { index, draft in
+                    draftTile(draft, index: index)
                 }
             }
         }
     }
 
-    private func thumbnail(data: Data, index: Int) -> some View {
+    private func addTile(symbol: String, title: String) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: symbol)
+                .font(.title2)
+            Text(title)
+                .font(.caption2)
+        }
+        .foregroundStyle(.secondary)
+        .frame(width: 80, height: 80)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(.secondarySystemFill))
+        )
+    }
+
+    private func draftTile(_ draft: MediaDraft, index: Int) -> some View {
         ZStack(alignment: .topTrailing) {
-            if let image = UIImage(data: data) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 80, height: 80)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Group {
+                switch draft.kind {
+                case .photo:
+                    if let image = UIImage(data: draft.data) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Color(.tertiarySystemFill)
+                    }
+                case .video:
+                    ZStack {
+                        Color.black.opacity(0.75)
+                        VStack(spacing: 4) {
+                            Image(systemName: "play.fill")
+                            Text("视频").font(.caption2)
+                        }
+                        .foregroundStyle(.white)
+                    }
+                case .audio:
+                    ZStack {
+                        Color(.tertiarySystemFill)
+                        VStack(spacing: 4) {
+                            Image(systemName: "waveform")
+                            Text("语音").font(.caption2)
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+                }
             }
+            .frame(width: 80, height: 80)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
             Button {
-                photos.remove(at: index)
+                drafts.remove(at: index)
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .symbolRenderingMode(.palette)
@@ -172,12 +221,15 @@ struct ComposeView: View {
         selectedTagIDs.insert(tag.id)
     }
 
-    private func loadPickedPhotos(_ items: [PhotosPickerItem]) {
+    private func loadPickedItems(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
         Task {
             for item in items {
+                let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
                 if let data = try? await item.loadTransferable(type: Data.self) {
-                    await MainActor.run { photos.append(data) }
+                    await MainActor.run {
+                        drafts.append(MediaDraft(kind: isVideo ? .video : .photo, data: data))
+                    }
                 }
             }
             await MainActor.run { pickerItems = [] }
@@ -185,10 +237,13 @@ struct ComposeView: View {
     }
 
     private func loadEditingState() {
-        guard let editing, photos.isEmpty, text.isEmpty else { return }
+        guard let editing, drafts.isEmpty, text.isEmpty else { return }
         text = editing.text
         selectedTagIDs = Set(editing.tagList.map(\.id))
-        photos = editing.sortedMedia.compactMap { $0.data }
+        drafts = editing.sortedMedia.compactMap { item in
+            guard let data = item.data else { return nil }
+            return MediaDraft(kind: item.kind, data: data)
+        }
     }
 
     private func save() {
@@ -208,8 +263,8 @@ struct ComposeView: View {
         }
 
         entry.tags = chosenTags
-        entry.media = photos.enumerated().map { index, data in
-            MediaItem(kind: .photo, data: data, order: index)
+        entry.media = drafts.enumerated().map { index, draft in
+            MediaItem(kind: draft.kind, data: draft.data, order: index)
         }
 
         try? context.save()

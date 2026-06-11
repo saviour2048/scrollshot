@@ -40,6 +40,8 @@
 		<string>remote-notification</string>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>用于选择照片，添加到你的记录里。</string>
+	<string>用于选择照片和视频，添加到你的记录里。</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>用于录制语音，添加到你的记录里。</string>
 </dict>
 </plist>

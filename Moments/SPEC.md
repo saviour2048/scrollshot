@@ -20,14 +20,21 @@
 - 无自建后端，数据全在用户的 iCloud 私有库
 
 ## MVP 范围（v1）
-1. **时间轴主界面**：按天分组、倒序，左侧竖直时间线 + 时间点，右侧记录卡片（文字 + 照片缩略图 + 标签）。
-2. **快速记录**：浮动「+」打开记录页 —— 写文字、`PhotosPicker` 加多张照片、选/新建标签；
-   保存时**自动写入当前时间戳**。
+1. **时间轴主界面**：按天分组、倒序，左侧竖直时间线 + 时间点，右侧记录卡片（文字 + 媒体缩略图 + 标签）。
+2. **快速记录**：浮动「+」打开记录页 —— 写文字、`PhotosPicker` 加多张照片/视频、录语音、
+   选/新建标签；保存时**自动写入当前时间戳**。
 3. **标签**：彩色标签，可在记录页即时新建；时间轴顶部可按标签筛选。
-4. **详情 / 编辑 / 删除**：点卡片进详情，可看大图、编辑文字与标签、增删照片、删除整条。
+4. **详情 / 编辑 / 删除**：点卡片进详情，可看大图/播视频/播语音、编辑文字与标签、增删媒体、删除整条。
 5. 首次启动**预置几个常用标签**（想法 / 生活 / 工作 / 心情）方便上手。
 
-> 视频、语音录制留到 v2（数据模型已用 `MediaKind` 预留 `.video / .audio`）。
+## v2 功能（已实现）
+- **语音录制**：记录页「语音」按钮 → 录音弹层（AVAudioRecorder，AAC/m4a）→ 详情页播放条
+  （播放/暂停 + 进度）。
+- **视频**：`PhotosPicker` 同时支持选视频；时间轴/详情异步取首帧做缩略图（NSCache 缓存），
+  全屏用 AVKit `VideoPlayer` 播放。
+- **标签管理页**：时间轴筛选菜单 →「管理标签…」—— 改名、改色（调色板）、左滑删除、
+  **合并到其他标签**（记录挪过去后删除本标签）。
+- **搜索**：时间轴顶部搜索框，按文字内容或标签名过滤。
 
 ## 数据模型（SwiftData，CloudKit 友好）
 CloudKit 约束：所有属性给默认值或可选、所有关系可选且有反向、不用唯一约束。
@@ -46,10 +53,11 @@ Moments/
     Models/Entry.swift  Tag.swift  MediaItem.swift
     Features/
       Timeline/TimelineView.swift  TimelineRowView.swift
-      Compose/ComposeView.swift     快速记录 / 编辑
+      Compose/ComposeView.swift  AudioRecordSheet.swift
       Detail/EntryDetailView.swift
-    Components/FlowLayout.swift  TagChip.swift  Color+Hex.swift  DateFormatting.swift
-    Support/TagSeeder.swift
+      Tags/TagManagerView.swift
+    Components/FlowLayout.swift  TagChip.swift  AudioPlayerView.swift  Color+Hex.swift  DateFormatting.swift
+    Support/TagSeeder.swift  AudioRecorder.swift  VideoThumbnailCache.swift
     Resources/Info.plist  Moments.entitlements  Assets.xcassets
 ```
 
@@ -61,6 +69,6 @@ Moments/
 4. Xcode 选真机或模拟器运行。iCloud 同步需登录 iCloud 账户并联网。
 
 ## 里程碑
-- **M1（本次）**：数据模型 + 时间轴 + 快速记录（文字/照片/标签）+ 详情/编辑/删除 + CloudKit 配置。
-- **M2**：语音录制 + 视频；标签管理页（改色/改名/合并）；搜索。
+- **M1 ✅**：数据模型 + 时间轴 + 快速记录（文字/照片/标签）+ 详情/编辑/删除 + CloudKit 配置。
+- **M2 ✅**：语音录制 + 视频；标签管理页（改色/改名/合并）；搜索。
 - **M3**：地图/地点标签、心情图标、Widget、回忆（去年今日）。

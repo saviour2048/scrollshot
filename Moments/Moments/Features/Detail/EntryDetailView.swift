@@ -1,7 +1,8 @@
 import SwiftUI
 import SwiftData
+import AVKit
 
-/// 记录详情：完整文字、大图、标签，可编辑或删除。
+/// 记录详情：完整文字、大图/视频、语音播放、标签，可编辑或删除。
 struct EntryDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -11,6 +12,10 @@ struct EntryDetailView: View {
     @State private var showEdit = false
     @State private var showDeleteConfirm = false
     @State private var previewItem: MediaItem?
+
+    /// 照片和视频走网格 + 全屏预览；语音单独列成播放条。
+    private var visualMedia: [MediaItem] { entry.sortedMedia.filter { $0.kind != .audio } }
+    private var audioMedia: [MediaItem] { entry.sortedMedia.filter { $0.kind == .audio } }
 
     var body: some View {
         ScrollView {
@@ -24,8 +29,16 @@ struct EntryDetailView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                if !entry.sortedMedia.isEmpty {
-                    photoGrid
+                if !visualMedia.isEmpty {
+                    mediaGrid
+                }
+
+                if !audioMedia.isEmpty {
+                    VStack(spacing: 8) {
+                        ForEach(audioMedia) { item in
+                            AudioPlayerView(data: item.data)
+                        }
+                    }
                 }
 
                 if !entry.tagList.isEmpty {
@@ -56,7 +69,7 @@ struct EntryDetailView: View {
             ComposeView(editing: entry)
         }
         .fullScreenCover(item: $previewItem) { item in
-            PhotoPreview(item: item)
+            MediaPreview(item: item)
         }
         .confirmationDialog("删除这条记录？", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("删除", role: .destructive) {
@@ -81,9 +94,9 @@ struct EntryDetailView: View {
         .foregroundStyle(.secondary)
     }
 
-    private var photoGrid: some View {
+    private var mediaGrid: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
-            ForEach(entry.sortedMedia) { item in
+            ForEach(visualMedia) { item in
                 Button {
                     previewItem = item
                 } label: {
@@ -95,19 +108,31 @@ struct EntryDetailView: View {
     }
 }
 
-/// 全屏看图。
-private struct PhotoPreview: View {
+/// 全屏预览：照片直接看，视频写到临时文件后用系统播放器播。
+private struct MediaPreview: View {
     @Environment(\.dismiss) private var dismiss
     let item: MediaItem
+
+    @State private var player: AVPlayer?
+    @State private var tempURL: URL?
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            if let data = item.data, let image = UIImage(data: data) {
+
+            if item.kind == .video {
+                if let player {
+                    VideoPlayer(player: player)
+                        .ignoresSafeArea()
+                } else {
+                    ProgressView().tint(.white)
+                }
+            } else if let data = item.data, let image = UIImage(data: data) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
             }
+
             VStack {
                 HStack {
                     Spacer()
@@ -124,5 +149,22 @@ private struct PhotoPreview: View {
                 Spacer()
             }
         }
+        .onAppear(perform: preparePlayer)
+        .onDisappear {
+            player?.pause()
+            if let tempURL { try? FileManager.default.removeItem(at: tempURL) }
+        }
+    }
+
+    private func preparePlayer() {
+        guard item.kind == .video, player == nil, let data = item.data else { return }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(item.id.uuidString + ".mov")
+        do { try data.write(to: url) } catch { return }
+        tempURL = url
+        try? AVAudioSession.sharedInstance().setCategory(.playback)
+        let avPlayer = AVPlayer(url: url)
+        player = avPlayer
+        avPlayer.play()
     }
 }
