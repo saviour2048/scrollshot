@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct MomentsApp: App {
+struct TracejarApp: App {
     let container: ModelContainer
 
     init() {

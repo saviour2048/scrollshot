@@ -4,6 +4,17 @@
 
 > 与仓库根部的 macOS `ScrollShot`（截图工具）是两个独立项目。
 
+## 命名说明（别被绕晕）
+| 名字 | 值 | 在哪用 |
+|---|---|---|
+| App Store 公开名 | **Tracejar** | 商店列表、TestFlight |
+| 手机图标名 | **Tracejar** | `CFBundleDisplayName` |
+| Xcode 工程/归档名 | **Tracejar** | `project.yml` 的 `name` / target |
+| Bundle ID | `com.tongwei.moments` | App 唯一标识，**永不修改**（已绑定商店记录 + iCloud 容器） |
+| 源码文件夹 | `Moments/`（内部路径） | 不影响任何对外名字 |
+
+Bundle ID 带 `moments` 是历史原因，属正常现象，用户看不到，不用改。
+
 ## 技术栈
 SwiftUI · SwiftData（本地持久化）· iCloud / CloudKit（多设备同步）· iOS 17+ · XcodeGen
 
