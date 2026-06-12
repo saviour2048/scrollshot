@@ -34,15 +34,18 @@ struct TimelineView: View {
         return groups.keys.sorted(by: >).map { ($0, groups[$0] ?? []) }
     }
 
+    /// 「去年今日」：往年同月同日（排除今天）的记录。不受筛选/搜索影响。
+    private var memories: [Entry] {
+        let cal = Calendar.current
+        let today = Date()
+        return entries.filter {
+            $0.createdAt.isSameMonthDay(as: today) && !cal.isDate($0.createdAt, inSameDayAs: today)
+        }
+    }
+
     var body: some View {
         NavigationStack {
-            Group {
-                if filtered.isEmpty {
-                    EmptyTimelineView(isFiltering: filterTag != nil || !searchText.isEmpty)
-                } else {
-                    timeline
-                }
-            }
+            timeline
             .navigationTitle("时刻")
             .navigationDestination(for: Entry.self) { EntryDetailView(entry: $0) }
             .searchable(text: $searchText, prompt: "搜索文字或标签")
@@ -59,16 +62,32 @@ struct TimelineView: View {
     private var timeline: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                ForEach(sections, id: \.date) { section in
-                    Section {
-                        ForEach(section.items) { entry in
-                            NavigationLink(value: entry) {
-                                TimelineRowView(entry: entry)
+                if !memories.isEmpty {
+                    NavigationLink {
+                        MemoriesView(entries: memories)
+                    } label: {
+                        MemoriesBanner(count: memories.count)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
+                    .padding(.bottom, 8)
+                }
+
+                if filtered.isEmpty {
+                    EmptyTimelineView(isFiltering: filterTag != nil || !searchText.isEmpty)
+                        .padding(.top, 48)
+                } else {
+                    ForEach(sections, id: \.date) { section in
+                        Section {
+                            ForEach(section.items) { entry in
+                                NavigationLink(value: entry) {
+                                    TimelineRowView(entry: entry)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
+                        } header: {
+                            DateHeader(date: section.date)
                         }
-                    } header: {
-                        DateHeader(date: section.date)
                     }
                 }
             }
@@ -136,6 +155,40 @@ private struct DateHeader: View {
         }
         .padding(.vertical, 8)
         .background(.background)
+    }
+}
+
+/// 「去年今日」入口横幅。
+private struct MemoriesBanner: View {
+    let count: Int
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.title2)
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(.white.opacity(0.22)))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("去年今日")
+                    .font(.subheadline.weight(.semibold))
+                Text("有 \(count) 条往年的今天，点开回看")
+                    .font(.caption)
+                    .opacity(0.9)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .opacity(0.8)
+        }
+        .foregroundStyle(.white)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    LinearGradient(colors: [Color(hex: "#FF8A65"), Color(hex: "#EC407A")],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                )
+        )
     }
 }
 

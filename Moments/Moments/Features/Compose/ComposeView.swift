@@ -29,6 +29,12 @@ struct ComposeView: View {
     @State private var showNewTag = false
     @State private var newTagName = ""
 
+    @State private var mood: Mood?
+    @State private var place: LocationProvider.Place?
+    @State private var fetchingLocation = false
+    @State private var locationDenied = false
+    @StateObject private var locationProvider = LocationProvider()
+
     @FocusState private var textFocused: Bool
 
     private var isEditing: Bool { editing != nil }
@@ -43,6 +49,8 @@ struct ComposeView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     textField
                     mediaSection
+                    moodSection
+                    locationSection
                     tagSection
                 }
                 .padding()
@@ -70,6 +78,11 @@ struct ComposeView: View {
                 TextField("标签名", text: $newTagName)
                 Button("添加", action: addNewTag)
                 Button("取消", role: .cancel) { newTagName = "" }
+            }
+            .alert("需要定位权限", isPresented: $locationDenied) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text("请到 设置 ▸ 隐私与安全性 ▸ 定位服务 里允许「时刻」使用定位。")
             }
         }
     }
@@ -167,6 +180,92 @@ struct ComposeView: View {
         }
     }
 
+    private var moodSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("心情")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                ForEach(Mood.allCases) { m in
+                    let selected = mood == m
+                    Button {
+                        mood = selected ? nil : m   // 再点一次取消
+                    } label: {
+                        VStack(spacing: 3) {
+                            Text(m.emoji)
+                                .font(.title2)
+                            Text(m.label)
+                                .font(.caption2)
+                                .foregroundStyle(selected ? m.color : .secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(selected ? m.color.opacity(0.15) : Color(.secondarySystemFill))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(selected ? m.color : .clear, lineWidth: 1.5)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var locationSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("地点")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            if let place {
+                HStack(spacing: 8) {
+                    Image(systemName: "mappin.circle.fill")
+                        .foregroundStyle(Color.accentColor)
+                    Text(place.name ?? "已记录当前位置")
+                        .font(.subheadline)
+                        .lineLimit(1)
+                    Spacer()
+                    Button {
+                        self.place = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(.secondarySystemFill))
+                )
+            } else {
+                Button(action: addLocation) {
+                    HStack(spacing: 8) {
+                        if fetchingLocation {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "location")
+                        }
+                        Text(fetchingLocation ? "定位中…" : "添加当前位置")
+                            .font(.subheadline)
+                        Spacer()
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color(.secondarySystemFill))
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(fetchingLocation)
+            }
+        }
+    }
+
     private var tagSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("标签")
@@ -221,6 +320,19 @@ struct ComposeView: View {
         selectedTagIDs.insert(tag.id)
     }
 
+    private func addLocation() {
+        fetchingLocation = true
+        Task {
+            let result = await locationProvider.fetch()
+            fetchingLocation = false
+            if let result {
+                place = result
+            } else if locationProvider.state == .denied {
+                locationDenied = true
+            }
+        }
+    }
+
     private func loadPickedItems(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
         Task {
@@ -240,6 +352,10 @@ struct ComposeView: View {
         guard let editing, drafts.isEmpty, text.isEmpty else { return }
         text = editing.text
         selectedTagIDs = Set(editing.tagList.map(\.id))
+        mood = editing.mood
+        if let lat = editing.latitude, let lon = editing.longitude {
+            place = LocationProvider.Place(latitude: lat, longitude: lon, name: editing.placeName)
+        }
         drafts = editing.sortedMedia.compactMap { item in
             guard let data = item.data else { return nil }
             return MediaDraft(kind: item.kind, data: data)
@@ -263,6 +379,10 @@ struct ComposeView: View {
         }
 
         entry.tags = chosenTags
+        entry.mood = mood
+        entry.latitude = place?.latitude
+        entry.longitude = place?.longitude
+        entry.placeName = place?.name
         entry.media = drafts.enumerated().map { index, draft in
             MediaItem(kind: draft.kind, data: draft.data, order: index)
         }

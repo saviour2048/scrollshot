@@ -36,10 +36,18 @@
   **合并到其他标签**（记录挪过去后删除本标签）。
 - **搜索**：时间轴顶部搜索框，按文字内容或标签名过滤。
 
+## v3 功能（App 内三块，已实现）
+- **心情图标**：记录页可选一个心情（😄🙂😐😔😣，再点取消）；时间轴卡片和详情显示对应 emoji + 颜色。
+- **地点标签**：记录页「添加当前位置」用 CoreLocation 一次性定位 + 反查地名；详情页用 MapKit
+  小地图展示，点一下用系统地图打开。
+- **去年今日**：时间轴顶部出现「去年今日」横幅（往年同月同日的记录），点开按年份回看。
+- > 桌面 Widget 留到后续（需要新建 extension target + App Group 共享存储）。
+
 ## 数据模型（SwiftData，CloudKit 友好）
 CloudKit 约束：所有属性给默认值或可选、所有关系可选且有反向、不用唯一约束。
 
-- **Entry（一条记录）**：`id, text, createdAt, updatedAt`，关系 `media: [MediaItem]?`（级联删除）、`tags: [Tag]?`。
+- **Entry（一条记录）**：`id, text, createdAt, updatedAt, moodRaw?, latitude?, longitude?, placeName?`，
+  关系 `media: [MediaItem]?`（级联删除）、`tags: [Tag]?`。
 - **MediaItem（媒体）**：`id, kindRaw(photo/video/audio), order, createdAt, data: Data?`（外部存储），反向 `entry`。
 - **Tag（标签）**：`id, name, colorHex, createdAt`，反向 `entries: [Entry]?`。
 
@@ -50,14 +58,15 @@ Moments/
   SPEC.md  README.md
   Moments/
     App/MomentsApp.swift            @main，配置带 CloudKit 的 ModelContainer
-    Models/Entry.swift  Tag.swift  MediaItem.swift
+    Models/Entry.swift  Tag.swift  MediaItem.swift  Mood.swift
     Features/
       Timeline/TimelineView.swift  TimelineRowView.swift
       Compose/ComposeView.swift  AudioRecordSheet.swift
       Detail/EntryDetailView.swift
       Tags/TagManagerView.swift
+      Memories/MemoriesView.swift
     Components/FlowLayout.swift  TagChip.swift  AudioPlayerView.swift  Color+Hex.swift  DateFormatting.swift
-    Support/TagSeeder.swift  AudioRecorder.swift  VideoThumbnailCache.swift
+    Support/TagSeeder.swift  AudioRecorder.swift  VideoThumbnailCache.swift  LocationProvider.swift
     Resources/Info.plist  Moments.entitlements  Assets.xcassets
 ```
 
@@ -71,4 +80,5 @@ Moments/
 ## 里程碑
 - **M1 ✅**：数据模型 + 时间轴 + 快速记录（文字/照片/标签）+ 详情/编辑/删除 + CloudKit 配置。
 - **M2 ✅**：语音录制 + 视频；标签管理页（改色/改名/合并）；搜索。
-- **M3**：地图/地点标签、心情图标、Widget、回忆（去年今日）。
+- **M3（App 内三块）✅**：心情图标、地点标签（CoreLocation + MapKit）、去年今日。
+- **M3 余项**：桌面 Widget（需新建 extension target + App Group 共享 SwiftData 存储）。

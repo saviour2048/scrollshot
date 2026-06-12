@@ -35,6 +35,21 @@ struct TimelineRowView: View {
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if entry.mood != nil || entry.placeName != nil {
+                HStack(spacing: 8) {
+                    if let mood = entry.mood {
+                        Text(mood.emoji)
+                            .font(.subheadline)
+                    }
+                    if let place = entry.placeName {
+                        Label(place, systemImage: "mappin")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+
             if !entry.text.isEmpty {
                 Text(entry.text)
                     .font(.body)

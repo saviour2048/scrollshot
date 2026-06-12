@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import AVKit
+import MapKit
 
 /// 记录详情：完整文字、大图/视频、语音播放、标签，可编辑或删除。
 struct EntryDetailView: View {
@@ -39,6 +40,10 @@ struct EntryDetailView: View {
                             AudioPlayerView(data: item.data)
                         }
                     }
+                }
+
+                if entry.hasLocation {
+                    locationCard
                 }
 
                 if !entry.tagList.isEmpty {
@@ -89,9 +94,56 @@ struct EntryDetailView: View {
             Text(entry.createdAt.timeShort())
             Text("·")
             Text(entry.createdAt.weekdayShort())
+            if let mood = entry.mood {
+                Text("·")
+                Text("\(mood.emoji) \(mood.label)")
+                    .foregroundStyle(mood.color)
+            }
+            Spacer()
         }
         .font(.subheadline)
         .foregroundStyle(.secondary)
+    }
+
+    /// 地点卡片：小地图 + 地名，点一下用系统地图打开。
+    private var locationCard: some View {
+        let coordinate = CLLocationCoordinate2D(latitude: entry.latitude ?? 0,
+                                                longitude: entry.longitude ?? 0)
+        return VStack(alignment: .leading, spacing: 0) {
+            Map(initialPosition: .region(MKCoordinateRegion(
+                center: coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            ))) {
+                Marker(entry.placeName ?? "这里", coordinate: coordinate)
+            }
+            .frame(height: 140)
+            .disabled(true)
+            .allowsHitTesting(false)
+
+            HStack(spacing: 6) {
+                Image(systemName: "mappin.circle.fill")
+                    .foregroundStyle(Color.accentColor)
+                Text(entry.placeName ?? "已记录的位置")
+                    .font(.subheadline)
+                Spacer()
+                Image(systemName: "arrow.up.forward.app")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(12)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .onTapGesture { openInMaps(coordinate) }
+    }
+
+    private func openInMaps(_ coordinate: CLLocationCoordinate2D) {
+        let placemark = MKPlacemark(coordinate: coordinate)
+        let item = MKMapItem(placemark: placemark)
+        item.name = entry.placeName ?? "记录地点"
+        item.openInMaps()
     }
 
     private var mediaGrid: some View {

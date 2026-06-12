@@ -9,6 +9,14 @@ final class Entry {
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
+    /// 心情（emoji 对应的 raw value），可选。
+    var moodRaw: String? = nil
+
+    /// 地点：经纬度 + 反查到的地名，可选。三者要么都有要么都没有。
+    var latitude: Double? = nil
+    var longitude: Double? = nil
+    var placeName: String? = nil
+
     // 关系都设为可选 + 有反向，符合 CloudKit 同步要求。
     @Relationship(deleteRule: .cascade, inverse: \MediaItem.entry)
     var media: [MediaItem]? = []
@@ -31,6 +39,14 @@ final class Entry {
     var tagList: [Tag] {
         (tags ?? []).sorted { $0.createdAt < $1.createdAt }
     }
+
+    var mood: Mood? {
+        get { moodRaw.flatMap(Mood.init) }
+        set { moodRaw = newValue?.rawValue }
+    }
+
+    /// 是否带有效坐标。
+    var hasLocation: Bool { latitude != nil && longitude != nil }
 
     var isEmpty: Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && (media ?? []).isEmpty
