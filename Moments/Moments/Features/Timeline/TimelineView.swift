@@ -11,6 +11,9 @@ struct TimelineView: View {
     @State private var showTagManager = false
     @State private var filterTag: Tag?
     @State private var searchText = ""
+    /// 长按菜单的目标：待删除 / 待编辑。
+    @State private var entryToDelete: Entry?
+    @State private var entryToEdit: Entry?
 
     private var filtered: [Entry] {
         var result = entries
@@ -43,17 +46,38 @@ struct TimelineView: View {
         }
     }
 
+    /// 删除确认框的显隐，跟 entryToDelete 联动。
+    private var deleteDialogShown: Binding<Bool> {
+        Binding(get: { entryToDelete != nil },
+                set: { if !$0 { entryToDelete = nil } })
+    }
+
+    private func delete(_ entry: Entry) {
+        context.delete(entry)
+        try? context.save()
+        entryToDelete = nil
+    }
+
     var body: some View {
         NavigationStack {
             timeline
             .navigationTitle("时刻")
             .navigationDestination(for: Entry.self) { EntryDetailView(entry: $0) }
-            .searchable(text: $searchText, prompt: "搜索文字或标签")
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "搜索文字或标签")
             .toolbar { filterToolbar }
             .overlay(alignment: .bottomTrailing) { addButton }
             .sheet(isPresented: $showCompose) { ComposeView() }
+            .sheet(item: $entryToEdit) { ComposeView(editing: $0) }
             .sheet(isPresented: $showTagManager) {
                 NavigationStack { TagManagerView() }
+            }
+            .confirmationDialog("删除这条记录？", isPresented: deleteDialogShown,
+                                titleVisibility: .visible, presenting: entryToDelete) { entry in
+                Button("删除", role: .destructive) { delete(entry) }
+                Button("取消", role: .cancel) {}
+            } message: { _ in
+                Text("删除后无法恢复。")
             }
             .task { TagSeeder.seedIfNeeded(context) }
         }
@@ -84,6 +108,18 @@ struct TimelineView: View {
                                     TimelineRowView(entry: entry)
                                 }
                                 .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button {
+                                        entryToEdit = entry
+                                    } label: {
+                                        Label("编辑", systemImage: "pencil")
+                                    }
+                                    Button(role: .destructive) {
+                                        entryToDelete = entry
+                                    } label: {
+                                        Label("删除", systemImage: "trash")
+                                    }
+                                }
                             }
                         } header: {
                             DateHeader(date: section.date)
