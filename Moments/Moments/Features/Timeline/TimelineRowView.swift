@@ -35,6 +35,18 @@ struct TimelineRowView: View {
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if !entry.text.isEmpty {
+                Text(entry.text)
+                    .font(.body)
+                    .lineLimit(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if !entry.sortedMedia.isEmpty {
+                MediaThumbnailStrip(media: entry.sortedMedia)
+            }
+
+            // 心情 + 地点：放在内容下方
             if entry.mood != nil || entry.placeName != nil {
                 HStack(spacing: 8) {
                     if let mood = entry.mood {
@@ -48,17 +60,6 @@ struct TimelineRowView: View {
                             .lineLimit(1)
                     }
                 }
-            }
-
-            if !entry.text.isEmpty {
-                Text(entry.text)
-                    .font(.body)
-                    .lineLimit(6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            if !entry.sortedMedia.isEmpty {
-                MediaThumbnailStrip(media: entry.sortedMedia)
             }
 
             if !entry.tagList.isEmpty {

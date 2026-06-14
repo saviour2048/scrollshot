@@ -27,7 +27,7 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
     override init() {
         super.init()
         manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        manager.desiredAccuracy = kCLLocationAccuracyBest
     }
 
     /// 请求一次定位；用户拒绝或失败时返回 nil。
@@ -93,13 +93,22 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
         continuation = nil
     }
 
-    /// 把 placemark 拼成「区/街道」这样的短地名。
+    /// 把 placemark 拼成尽量精确的短地名：优先 POI / 街道+门牌，再带上所在区域。
     private static func describe(_ p: CLPlacemark) -> String {
-        let parts = [p.subLocality, p.locality, p.name]
+        // 最具体的一项：POI 名，或「街道 门牌号」
+        let street = [p.thoroughfare, p.subThoroughfare]
+            .compactMap { $0 }
+            .joined(separator: " ")
+        let specific = p.name ?? (street.isEmpty ? nil : street)
+
+        // 区域上下文：街区 / 城区
+        let area = p.subLocality ?? p.locality
+
+        let parts = [specific, area]
             .compactMap { $0 }
             .reduce(into: [String]()) { acc, next in
                 if !acc.contains(next) { acc.append(next) }
             }
-        return parts.prefix(2).joined(separator: " · ")
+        return parts.isEmpty ? "已记录的位置" : parts.prefix(2).joined(separator: " · ")
     }
 }

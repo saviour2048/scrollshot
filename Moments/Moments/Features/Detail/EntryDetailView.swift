@@ -112,7 +112,7 @@ struct EntryDetailView: View {
         return VStack(alignment: .leading, spacing: 0) {
             Map(initialPosition: .region(MKCoordinateRegion(
                 center: coordinate,
-                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                span: MKCoordinateSpan(latitudeDelta: 0.004, longitudeDelta: 0.004)
             ))) {
                 Marker(entry.placeName ?? "这里", coordinate: coordinate)
             }
